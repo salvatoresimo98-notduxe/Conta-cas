@@ -335,6 +335,53 @@ h1{font-size:1.05rem;margin:0;font-weight:800;letter-spacing:.01em;}
 
 .locked .card input,.locked .card textarea,.locked .card button,
 .locked .dcell input,.locked .dstep,.locked .notebox textarea{pointer-events:none;opacity:.72;}
+/* ---- landscape tablet layout ---- */
+@media (min-width:860px) and (orientation:landscape){
+  .wrap{max-width:1320px;}
+  header .wrap{max-width:1320px;}
+
+  #app{
+    display:grid;
+    align-items:start;
+    column-gap:18px;
+    grid-template-columns:1.25fr 1fr;
+    grid-template-areas:
+      "total     total"
+      "conteggio importi"
+      "conteggio uscite"
+      "fondo     verdict"
+      "fondo     split"
+      "fondo     note"
+      "fondo     actions"
+      "fondo     msg"
+      "hist      hist"
+      "foot      foot";
+  }
+  .runbar{ grid-area:total; margin-top:0; position:static; }
+  #cardConteggio{ grid-area:conteggio; align-self:start; }
+  #cardImporti  { grid-area:importi; }
+  #cardUscite   { grid-area:uscite; }
+  #promemoria,
+  #fondoCard    { grid-area:fondo; align-self:start; }
+  #verdict      { grid-area:verdict; }
+  #splitBox     { grid-area:split; }
+  .notebox      { grid-area:note; }
+  .actions      { grid-area:actions; margin-top:0; }
+  #saveMsg      { grid-area:msg; margin-top:0; }
+  .hist         { grid-area:hist; }
+  .foot         { grid-area:foot; }
+
+  /* the grid gap replaces the stacked top-margins */
+  #cardImporti,#cardUscite,#verdict,#splitBox,.notebox{ margin-top:0; }
+  #cardConteggio,#promemoria,#fondoCard{ margin-top:0; }
+  #cardImporti{ margin-top:0; }
+  .runbar + #cardConteggio{ margin-top:14px; }
+
+  /* vertical rhythm inside each column via row-gap */
+  #app{ row-gap:14px; }
+
+  .dgrid{ grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); }
+}
 </style>
 </head>
 <body>
@@ -371,13 +418,13 @@ h1{font-size:1.05rem;margin:0;font-weight:800;letter-spacing:.01em;}
     <span class="val" id="runTotal">€ 0,00</span>
   </div>
 
-  <div class="card">
+  <div class="card" id="cardConteggio">
     <h2>Conteggio contante <span class="hint">— inserisci solo le quantità</span></h2>
     <div id="denGrid"></div>
     <div class="dentotal"><span>Totale contante</span><span class="v" id="denTotal">€ 0,00</span></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="cardImporti">
     <h2 id="importiTitle">Incassi e fondo</h2>
     <div class="fld">
       <label>Fondo cassa <small id="fondoHint">valore fisso di riferimento</small></label>
@@ -397,7 +444,7 @@ h1{font-size:1.05rem;margin:0;font-weight:800;letter-spacing:.01em;}
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="cardUscite">
     <h2>Uscite di cassa <span class="hint">— fornitori, spese, prelievi</span></h2>
     <div id="usciteList"></div>
     <button class="addbtn" id="addUscita">+ Aggiungi uscita</button>
