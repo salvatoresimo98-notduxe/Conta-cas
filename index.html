@@ -314,6 +314,7 @@ h1{font-size:1.05rem;margin:0;font-weight:800;letter-spacing:.01em;}
 .hrowi .amt{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.85rem;}
 .hrowi .amt.ok{color:var(--green);}
 .hrowi .amt.bad{color:var(--red);}
+.hrowi .amt.na{color:var(--ink-faint);font-weight:600;}
 .hempty{color:var(--ink-faint);font-size:.85rem;padding:8px 2px;}
 
 .foot{text-align:center;margin-top:26px;font-size:.72rem;color:var(--ink-faint);}
@@ -481,10 +482,8 @@ h1{font-size:1.05rem;margin:0;font-weight:800;letter-spacing:.01em;}
 
   <div class="split" id="splitBox" style="display:none">
     <h2>Dove si è generata la differenza</h2>
-    <div class="note">Confronto con il check del pranzo della stessa giornata.</div>
-    <div class="splitrow"><span class="k">Differenza al check pranzo</span><span class="v" id="sPranzo">—</span></div>
-    <div class="splitrow"><span class="k">Differenza sull'intera giornata</span><span class="v" id="sGiorno">—</span></div>
-    <div class="splitrow"><span class="k">Maturata nel servizio serale</span><span class="v" id="sSera">—</span></div>
+    <div class="note" id="splitNote">Confronto con il check del pranzo della stessa giornata.</div>
+    <div id="splitBody"></div>
   </div>
 
   <div class="notebox">
@@ -633,20 +632,32 @@ function recalc(){
   NOTES.concat(COINS).forEach(v=>{ contato += (qty[v]||0)*v; });
   contato=Math.round(contato*100)/100;
 
+  const simplifiedMode = (cassa==='bar' && turno==='pranzo');
+
   const fondo=n($('fFondo').value), corr=n($('fCorr').value),
         pos=n($('fPos').value), altri=n($('fAltri').value);
-  const totUscite=uscite.reduce((s,u)=>s+n(u.importo),0);
+  const totUscite = simplifiedMode ? 0 : uscite.reduce((s,u)=>s+n(u.importo),0);
 
-  const atteso = Math.round((fondo + corr - pos - altri - totUscite)*100)/100;
-  const diff   = Math.round((contato - atteso)*100)/100;
+  const atteso = simplifiedMode ? null : Math.round((fondo + corr - pos - altri - totUscite)*100)/100;
+  const diff   = simplifiedMode ? null : Math.round((contato - atteso)*100)/100;
 
   $('runTotal').textContent=eur(contato);
   $('denTotal').textContent=eur(contato);
   $('usciteTotal').textContent=eur(totUscite);
 
-  const ready = $('fCorr').value!=='' && contato>0;
+  const ready = simplifiedMode ? contato>0 : ($('fCorr').value!=='' && contato>0);
   const v=$('verdict'), big=$('vBig'), sm=$('vSm'), br=$('vBreak');
-  if(!ready){
+
+  if(simplifiedMode){
+    br.style.display='none';
+    if(!ready){
+      v.className='verdict neutral'; big.textContent='—';
+      sm.textContent='Conta il contante per registrare il check';
+    } else {
+      v.className='verdict ok'; big.textContent='✓ Pronto da salvare';
+      sm.textContent='Check di controllo pranzo — solo conteggio, nessun corrispettivo richiesto';
+    }
+  } else if(!ready){
     v.className='verdict neutral'; big.textContent='—';
     sm.textContent='Inserisci corrispettivi e conteggio per vedere l\'esito';
     br.style.display='none';
@@ -669,28 +680,57 @@ function recalc(){
     }
   }
 
-  const needNote = ready && Math.abs(diff)>soglia;
+  const needNote = !simplifiedMode && ready && Math.abs(diff)>soglia;
   $('noteReq').style.display = needNote?'block':'none';
   $('sogliaLbl').textContent = soglia;
   $('saveBtn').disabled = locked || !ready || (needNote && !$('fNota').value.trim());
 
-  lastCalc={contato,fondo,corr,pos,altri,totUscite,atteso,diff,ready};
+  lastCalc={contato,fondo,corr,pos,altri,totUscite,atteso,diff,ready,simplifiedMode};
   updateSplit(diff, ready);
   if(turno==='sera') recalcFondo();
 }
 
 /* ---------- evening split ---------- */
-let pranzoDiff=null;
+let pranzoDiff=null, pranzoSimplified=null;
 async function loadPranzoDiff(){
-  pranzoDiff=null;
+  pranzoDiff=null; pranzoSimplified=null;
   if(turno!=='sera'){ $('splitBox').style.display='none'; return; }
   const raw=await store.get(key(cassa,date,'pranzo'));
-  if(raw){ try{ pranzoDiff=JSON.parse(raw).diff; }catch(e){} }
+  if(raw){
+    try{
+      const o=JSON.parse(raw);
+      if(o.simplified) pranzoSimplified={contato:o.contato, ts:o.ts};
+      else pranzoDiff=o.diff;
+    }catch(e){}
+  }
   $('splitBox').style.display='block';
   updateSplit(lastCalc.diff||0, lastCalc.ready);
 }
 function updateSplit(diffGiorno, ready){
   if(turno!=='sera') return;
+  const body=$('splitBody');
+
+  if(pranzoSimplified){
+    const ora=new Date(pranzoSimplified.ts).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+    let html =
+      '<div class="splitrow"><span class="k">Contante contato a pranzo</span>'+
+      '<span class="v na">'+eur(pranzoSimplified.contato)+' — ore '+ora+'</span></div>';
+    if(ready){
+      html += '<div class="splitrow"><span class="k">Differenza sull\'intera giornata</span>'+
+        '<span class="v '+(Math.abs(diffGiorno)<0.005?'ok':'bad')+'">'+
+        (Math.abs(diffGiorno)<0.005?'✓ quadra':sgn(diffGiorno))+'</span></div>';
+    }
+    $('splitNote').textContent = 'A pranzo è stato solo controllato il contante, senza corrispettivi: usalo come riferimento per verificare che nulla sia sparito da allora.';
+    body.innerHTML=html;
+    return;
+  }
+
+  $('splitNote').textContent = 'Confronto con il check del pranzo della stessa giornata.';
+  let html =
+    '<div class="splitrow"><span class="k">Differenza al check pranzo</span><span class="v" id="sPranzo">—</span></div>'+
+    '<div class="splitrow"><span class="k">Differenza sull\'intera giornata</span><span class="v" id="sGiorno">—</span></div>'+
+    '<div class="splitrow"><span class="k">Maturata nel servizio serale</span><span class="v" id="sSera">—</span></div>';
+  body.innerHTML=html;
   const p=$('sPranzo'), g=$('sGiorno'), s=$('sSera');
   if(pranzoDiff===null){
     p.className='v na'; p.textContent='check pranzo non registrato';
@@ -837,8 +877,29 @@ function line(k,v){ return pad(k,20)+padL(v,13); }
 function buildSummary(){
   const c=lastCalc;
   const nomeCassa = cassa==='principale'?'CASSA PRINCIPALE':'CASSA BAR';
-  const nomeTurno = turno==='pranzo'?'Check pranzo':'Chiusura serale';
   const L=[];
+
+  if(c.simplifiedMode){
+    L.push(nomeCassa+' — Check pranzo (controllo contante)');
+    L.push(fmtD(date));
+    L.push('─'.repeat(33));
+    L.push(line('Contante contato', eur(c.contato)));
+    const tagli0=NOTES.concat(COINS).filter(v=>qty[v]>0);
+    if(tagli0.length){
+      L.push('');
+      L.push('Dettaglio conteggio');
+      tagli0.forEach(v=>{ L.push('  '+pad(denLabel(v)+' × '+qty[v],17)+padL(eur(qty[v]*v),13)); });
+    }
+    const nota0=$('fNota').value.trim();
+    if(nota0){ L.push(''); L.push('Nota: '+nota0); }
+    const now0=new Date();
+    L.push('');
+    L.push('Registrato il '+now0.toLocaleDateString('it-IT')+' alle '+
+           now0.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}));
+    return L.join('\n');
+  }
+
+  const nomeTurno = turno==='pranzo'?'Check pranzo':'Chiusura serale';
   L.push(nomeCassa+' — '+nomeTurno);
   L.push(fmtD(date));
   L.push('─'.repeat(33));
@@ -856,7 +917,11 @@ function buildSummary(){
   L.push('─'.repeat(33));
   L.push(Math.abs(c.diff)<0.005 ? line('QUADRA','✓') : line('DIFFERENZA', sgn(c.diff)));
 
-  if(turno==='sera' && pranzoDiff!==null){
+  if(turno==='sera' && pranzoSimplified){
+    const ora=new Date(pranzoSimplified.ts).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+    L.push('');
+    L.push(line('Contante contato a pranzo', eur(pranzoSimplified.contato)+' (ore '+ora+')'));
+  } else if(turno==='sera' && pranzoDiff!==null){
     const sera=Math.round((c.diff-pranzoDiff)*100)/100;
     L.push('');
     L.push('Ripartizione della differenza');
@@ -979,6 +1044,10 @@ async function load(){
     ? 'lettura non fiscale a fine pranzo' : 'totale giornata dalla chiusura turno RT';
   $('importiTitle').textContent = turno==='pranzo' ? 'Incassi del pranzo' : 'Incassi dell\'intera giornata';
 
+  const simplifiedMode = (cassa==='bar' && turno==='pranzo');
+  $('cardImporti').style.display = simplifiedMode ? 'none' : '';
+  $('cardUscite').style.display  = simplifiedMode ? 'none' : '';
+
   const raw=await store.get(key(cassa,date,turno));
   if(raw){
     try{
@@ -1002,14 +1071,17 @@ async function load(){
 $('saveBtn').onclick=async()=>{
   if(locked)return;
   const c=lastCalc;
-  const payload={qty,fondoQty,uscite,fondo:c.fondo,corr:c.corr,pos:c.pos,altri:c.altri,
-    uscite_tot:c.totUscite,contato:c.contato,atteso:c.atteso,diff:c.diff,
-    fondo_lasciato:fondoCalc.left||0,prelevato:Math.max(0,fondoCalc.take||0),
-    nota:$('fNota').value.trim(),ts:Date.now()};
+  const payload = c.simplifiedMode
+    ? { simplified:true, qty, contato:c.contato,
+        nota:$('fNota').value.trim(), ts:Date.now() }
+    : { qty,fondoQty,uscite,fondo:c.fondo,corr:c.corr,pos:c.pos,altri:c.altri,
+        uscite_tot:c.totUscite,contato:c.contato,atteso:c.atteso,diff:c.diff,
+        fondo_lasciato:fondoCalc.left||0,prelevato:Math.max(0,fondoCalc.take||0),
+        nota:$('fNota').value.trim(),ts:Date.now() };
   const ok=await store.set(key(cassa,date,turno),JSON.stringify(payload));
   if(!ok){ $('saveMsg').textContent='Salvataggio non riuscito.'; return; }
   hist=hist.filter(h=>!(h.c===cassa&&h.d===date&&h.t===turno));
-  hist.push({c:cassa,d:date,t:turno,diff:c.diff});
+  hist.push({c:cassa,d:date,t:turno,diff:c.diff,simplified:c.simplifiedMode,contato:c.contato});
   hist.sort((a,b)=> b.d.localeCompare(a.d) || (a.t==='sera'?-1:1));
   if(hist.length>150) hist=hist.slice(0,150);
   await store.set('hist',JSON.stringify(hist));
@@ -1041,9 +1113,13 @@ function renderHist(){
     const t=document.createElement('span'); t.className='txt';
     t.innerHTML=fmtD(h.d)+'<small>'+(h.c==='principale'?'Principale':'Bar')+' · '+(h.t==='pranzo'?'Pranzo':'Sera')+'</small>';
     const a=document.createElement('span');
-    const ok=Math.abs(h.diff)<0.005;
-    a.className='amt '+(ok?'ok':'bad');
-    a.textContent= ok?'✓':sgn(h.diff);
+    if(h.simplified){
+      a.className='amt na'; a.textContent=eur(h.contato||0);
+    } else {
+      const ok=Math.abs(h.diff)<0.005;
+      a.className='amt '+(ok?'ok':'bad');
+      a.textContent= ok?'✓':sgn(h.diff);
+    }
     b.append(dot,t,a);
     b.onclick=()=>{ cassa=h.c; date=h.d; turno=h.t; load(); window.scrollTo({top:0,behavior:'smooth'}); };
     l.appendChild(b);
