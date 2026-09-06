@@ -381,6 +381,28 @@ h1{font-size:1.05rem;margin:0;font-weight:800;letter-spacing:.01em;}
   /* vertical rhythm inside each column via row-gap */
   #app{ row-gap:14px; }
 
+  /* bar + pranzo: poco contenuto — colonna singola centrata, niente mezze colonne vuote */
+  #app.mode-simple.mode-lunch{
+    display:block;
+    max-width:660px;
+    margin:0 auto;
+  }
+  #app.mode-simple.mode-lunch .runbar{ margin-top:0; }
+
+  /* bar + sera: conteggio e fondo a sinistra, esito e azioni a destra */
+  #app.mode-simple:not(.mode-lunch){
+    grid-template-columns:1.35fr 1fr;
+    grid-template-areas:
+      "total     total"
+      "conteggio verdict"
+      "conteggio split"
+      "fondo     note"
+      "fondo     actions"
+      "fondo     msg"
+      "hist      hist"
+      "foot      foot";
+  }
+
   .dgrid{ grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); }
 }
 </style>
@@ -481,7 +503,7 @@ h1{font-size:1.05rem;margin:0;font-weight:800;letter-spacing:.01em;}
   </div>
 
   <div class="split" id="splitBox" style="display:none">
-    <h2>Dove si è generata la differenza</h2>
+    <h2 id="splitTitle">Dove si è generata la differenza</h2>
     <div class="note" id="splitNote">Confronto con il check del pranzo della stessa giornata.</div>
     <div id="splitBody"></div>
   </div>
@@ -632,7 +654,7 @@ function recalc(){
   NOTES.concat(COINS).forEach(v=>{ contato += (qty[v]||0)*v; });
   contato=Math.round(contato*100)/100;
 
-  const simplifiedMode = (cassa==='bar' && turno==='pranzo');
+  const simplifiedMode = (cassa==='bar');
 
   const fondo=n($('fFondo').value), corr=n($('fCorr').value),
         pos=n($('fPos').value), altri=n($('fAltri').value);
@@ -655,7 +677,9 @@ function recalc(){
       sm.textContent='Conta il contante per registrare il check';
     } else {
       v.className='verdict ok'; big.textContent='✓ Pronto da salvare';
-      sm.textContent='Check di controllo pranzo — solo conteggio, nessun corrispettivo richiesto';
+      sm.textContent = turno==='pranzo'
+        ? 'Check di controllo pranzo — solo conteggio del contante'
+        : 'Chiusura serale bar — solo conteggio del contante';
     }
   } else if(!ready){
     v.className='verdict neutral'; big.textContent='—';
@@ -709,6 +733,31 @@ async function loadPranzoDiff(){
 function updateSplit(diffGiorno, ready){
   if(turno!=='sera') return;
   const body=$('splitBody');
+  const curSimple = lastCalc.simplifiedMode;
+
+  if(curSimple){
+    $('splitTitle').textContent='Confronto con il pranzo';
+    if(!pranzoSimplified && pranzoDiff===null){
+      $('splitNote').textContent='Nessun check registrato a pranzo per questa cassa.';
+      body.innerHTML='';
+      return;
+    }
+    const rif = pranzoSimplified ? pranzoSimplified.contato : null;
+    const ora = pranzoSimplified ? new Date(pranzoSimplified.ts).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'}) : '';
+    $('splitNote').textContent='Confronto con il conteggio registrato a pranzo.';
+    let html='';
+    if(rif!==null){
+      html+='<div class="splitrow"><span class="k">Contato a pranzo — ore '+ora+'</span>'+
+            '<span class="v na">'+eur(rif)+'</span></div>';
+      html+='<div class="splitrow"><span class="k">Contato ora</span>'+
+            '<span class="v">'+eur(lastCalc.contato||0)+'</span></div>';
+      const d=Math.round(((lastCalc.contato||0)-rif)*100)/100;
+      html+='<div class="splitrow"><span class="k">Variazione dal pranzo</span>'+
+            '<span class="v '+(d<0?'bad':'')+'">'+(d===0?'nessuna':sgn(d))+'</span></div>';
+    }
+    body.innerHTML=html;
+    return;
+  }
 
   if(pranzoSimplified){
     const ora=new Date(pranzoSimplified.ts).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
@@ -720,11 +769,13 @@ function updateSplit(diffGiorno, ready){
         '<span class="v '+(Math.abs(diffGiorno)<0.005?'ok':'bad')+'">'+
         (Math.abs(diffGiorno)<0.005?'✓ quadra':sgn(diffGiorno))+'</span></div>';
     }
+    $('splitTitle').textContent='Riferimento del pranzo';
     $('splitNote').textContent = 'A pranzo è stato solo controllato il contante, senza corrispettivi: usalo come riferimento per verificare che nulla sia sparito da allora.';
     body.innerHTML=html;
     return;
   }
 
+  $('splitTitle').textContent='Dove si è generata la differenza';
   $('splitNote').textContent = 'Confronto con il check del pranzo della stessa giornata.';
   let html =
     '<div class="splitrow"><span class="k">Differenza al check pranzo</span><span class="v" id="sPranzo">—</span></div>'+
@@ -880,7 +931,7 @@ function buildSummary(){
   const L=[];
 
   if(c.simplifiedMode){
-    L.push(nomeCassa+' — Check pranzo (controllo contante)');
+    L.push(nomeCassa+' — '+(turno==='pranzo'?'Check pranzo':'Chiusura serale')+' (controllo contante)');
     L.push(fmtD(date));
     L.push('─'.repeat(33));
     L.push(line('Contante contato', eur(c.contato)));
@@ -892,6 +943,22 @@ function buildSummary(){
     }
     const nota0=$('fNota').value.trim();
     if(nota0){ L.push(''); L.push('Nota: '+nota0); }
+
+    if(turno==='sera' && fondoCalc.left){
+      L.push('');
+      L.push('FONDO LASCIATO IN CASSA');
+      L.push(line('Prelevato', eur(Math.max(0,fondoCalc.take))));
+      L.push(line('Resta in cassa', eur(fondoCalc.left)));
+      if(fondoCalc.range)
+        L.push(line('  range previsto', eur(fondoCalc.range.min)+'–'+eur(fondoCalc.range.max).replace('€ ','')));
+      if(!fondoCalc.inRange)
+        L.push(line('  FUORI RANGE', sgn(fondoCalc.delta)));
+      NOTES.concat(COINS).filter(v=>fondoQty[v]>0).forEach(v=>{
+        const r=(FONDO_TAGLI[cassa][v]||0), q=fondoQty[v];
+        L.push('  '+pad(denLabel(v)+' × '+q,17)+padL(eur(q*v),13)+(q!==r?'   (rif. '+r+')':''));
+      });
+    }
+
     const now0=new Date();
     L.push('');
     L.push('Registrato il '+now0.toLocaleDateString('it-IT')+' alle '+
@@ -1044,9 +1111,11 @@ async function load(){
     ? 'lettura non fiscale a fine pranzo' : 'totale giornata dalla chiusura turno RT';
   $('importiTitle').textContent = turno==='pranzo' ? 'Incassi del pranzo' : 'Incassi dell\'intera giornata';
 
-  const simplifiedMode = (cassa==='bar' && turno==='pranzo');
+  const simplifiedMode = (cassa==='bar');
   $('cardImporti').style.display = simplifiedMode ? 'none' : '';
   $('cardUscite').style.display  = simplifiedMode ? 'none' : '';
+  $('app').classList.toggle('mode-simple', simplifiedMode);
+  $('app').classList.toggle('mode-lunch', simplifiedMode && turno==='pranzo');
 
   const raw=await store.get(key(cassa,date,turno));
   if(raw){
@@ -1072,7 +1141,8 @@ $('saveBtn').onclick=async()=>{
   if(locked)return;
   const c=lastCalc;
   const payload = c.simplifiedMode
-    ? { simplified:true, qty, contato:c.contato,
+    ? { simplified:true, qty, fondoQty, contato:c.contato,
+        fondo_lasciato:fondoCalc.left||0, prelevato:Math.max(0,fondoCalc.take||0),
         nota:$('fNota').value.trim(), ts:Date.now() }
     : { qty,fondoQty,uscite,fondo:c.fondo,corr:c.corr,pos:c.pos,altri:c.altri,
         uscite_tot:c.totUscite,contato:c.contato,atteso:c.atteso,diff:c.diff,
