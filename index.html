@@ -1103,10 +1103,10 @@ function isDone(c,t){
   return false;
 }
 function renderDone(){
-  /* i pulsanti cassa mostrano lo stato del turno selezionato,
-     i pulsanti turno quello della cassa selezionata */
+  /* una cassa è spuntata solo quando ha entrambi i turni registrati;
+     i pulsanti turno restano per turno, sulla cassa selezionata */
   Array.prototype.forEach.call(document.querySelectorAll('#segC button'), function(b){
-    b.classList.toggle('done', isDone(b.dataset.v, turno));
+    b.classList.toggle('done', isDone(b.dataset.v,'pranzo') && isDone(b.dataset.v,'sera'));
   });
   Array.prototype.forEach.call(document.querySelectorAll('#segT button'), function(b){
     b.classList.toggle('done', isDone(cassa, b.dataset.v));
