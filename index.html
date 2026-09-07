@@ -172,6 +172,13 @@ textarea:focus{border-color:var(--ink);}
 
 .locked input,.locked textarea,.locked .dstep,.locked .add,.locked .x{pointer-events:none;opacity:.7;}
 
+/* ============ intestazione cassa nella chiusura ============ */
+.tillhead{font-size:.78rem;font-weight:800;color:var(--wine);margin:14px 0 2px;
+  padding-top:12px;border-top:1px solid var(--rule);}
+.tillhead.bar{color:var(--green);}
+#cChiusura .tillhead:first-of-type{margin-top:8px;padding-top:0;border-top:none;}
+.byline{font-size:.68rem;color:var(--faint);white-space:nowrap;}
+
 /* ============ login ============ */
 #gate{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
 .gcard{background:var(--card);border-radius:14px;padding:26px 22px;width:100%;max-width:380px;box-shadow:0 10px 40px -18px rgba(0,0,0,.4);}
@@ -270,8 +277,12 @@ textarea:focus{border-color:var(--ink);}
         <span class="cur">€</span><input type="number" id="fAltri" step="0.01" inputmode="decimal" placeholder="0,00">
       </div>
       <div class="fld">
-        <label>Fondo a inizio turno <small id="fondoHint"></small></label>
+        <label>Fondo iniziale principale <small id="fondoHint"></small></label>
         <span class="cur">€</span><input type="number" id="fFondo" step="0.01" inputmode="decimal">
+      </div>
+      <div class="fld">
+        <label>Fondo iniziale bar <small id="fondoBarHint"></small></label>
+        <span class="cur">€</span><input type="number" id="fFondoBar" step="0.01" inputmode="decimal">
       </div>
     </div>
 
@@ -280,6 +291,16 @@ textarea:focus{border-color:var(--ink);}
         <span class="live" id="uTot">€ 0,00</span></div>
       <div id="uList"></div>
       <button class="add" id="uAdd">+ Aggiungi uscita</button>
+    </div>
+
+    <div class="card hide" id="cTotale">
+      <div class="chead"><h2>Contante nelle due casse</h2></div>
+      <div class="row"><span class="k">Cassa principale<small>contata qui</small></span>
+        <span class="v" id="tPrinc">€ 0,00</span></div>
+      <div class="row"><span class="k" id="tBarK">Cassa bar</span>
+        <span class="v" id="tBar">€ 0,00</span></div>
+      <div class="row"><span class="k">Totale contante</span>
+        <span class="v" id="tTot">€ 0,00</span></div>
     </div>
 
     <div class="verd" id="verd">
@@ -300,10 +321,12 @@ textarea:focus{border-color:var(--ink);}
     <div class="card hide" id="cChiusura">
       <div class="chead"><h2>Chiusura di cassa</h2><span class="hint">calcolato in automatico</span></div>
       <div class="split2">
-        <div class="box"><div class="k">Da prelevare</div><div class="v" id="kTake">€ 0,00</div></div>
-        <div class="box"><div class="k">Resta in cassa</div><div class="v" id="kKeep">€ 0,00</div></div>
+        <div class="box"><div class="k">Da prelevare in tutto</div><div class="v" id="kTake">€ 0,00</div></div>
+        <div class="box"><div class="k">Resta nelle casse</div><div class="v" id="kKeep">€ 0,00</div></div>
       </div>
-      <div class="sublab">Preleva questi tagli</div>
+
+      <div class="tillhead" id="hP">Cassa principale</div>
+      <div class="sublab">Preleva</div>
       <div class="taglist" id="takeList"></div>
       <div class="sublab">Lascia in cassa</div>
       <div class="taglist" id="keepList"></div>
@@ -313,6 +336,21 @@ textarea:focus{border-color:var(--ink);}
         <span class="cur">€</span>
         <input type="number" id="fTarget" step="5" inputmode="decimal">
         <button id="tReset">auto</button>
+      </div>
+
+      <div id="barBlock">
+        <div class="tillhead bar" id="hB">Cassa bar</div>
+        <div class="sublab">Preleva</div>
+        <div class="taglist" id="takeListB"></div>
+        <div class="sublab">Lascia in cassa</div>
+        <div class="taglist" id="keepListB"></div>
+        <div class="warnline hide" id="kWarnB"></div>
+        <div class="tgt">
+          <label>Fondo da lasciare</label>
+          <span class="cur">€</span>
+          <input type="number" id="fTargetB" step="5" inputmode="decimal">
+          <button id="tResetB">auto</button>
+        </div>
       </div>
     </div>
 
@@ -393,7 +431,9 @@ var ALL   = NOTES.concat(COINS);
 /* ===================== stato ===================== */
 var cassa='principale', turno='pranzo', date=today();
 var qty={}, uscite=[], soglia=5, locked=false, hist=[];
-var lastFondo=null, refPranzo=null, targetOverride=null;
+var lastFondo=null, lastFondoBar=null, refPranzo=null;
+var targetOverride=null, targetOverrideB=null;
+var barCheck=null, savedBy='';
 var calc={}, chiusura={keep:{},take:{},keepTot:0,takeTot:0,inRange:true};
 
 /* ===================== storage (Firestore) =====================
@@ -435,12 +475,11 @@ function isFull(){return CASSE[cassa].full;}
    Un solo conteggio. Dal contante contato l'app toglie i tagli
    più grandi finché il resto rientra nel fondo voluto: monete e
    tagli piccoli restano in cassa per il resto del giorno dopo. */
-function computeChiusura(){
-  var C=CASSE[cassa];
-  var lo = targetOverride!==null ? targetOverride : C.min;
-  var hi = targetOverride!==null ? targetOverride : C.max;
+function computeChiusura(q, C, override){
+  var lo = (override!==null && override!==undefined) ? override : C.min;
+  var hi = (override!==null && override!==undefined) ? override : C.max;
   var keep={}, take={}, i, v;
-  ALL.forEach(function(d){ keep[d]=qty[d]||0; });
+  ALL.forEach(function(d){ keep[d]=q[d]||0; });
   var rest=sumQty(keep);
 
   if(rest>hi){
@@ -453,9 +492,10 @@ function computeChiusura(){
     }
   }
   var keepTot=r2(rest);
-  var takeTot=r2(sumQty(qty)-rest);
-  var inRange = keepTot>=lo-0.005 && keepTot<=hi+0.005;
-  return {keep:keep,take:take,keepTot:keepTot,takeTot:takeTot,inRange:inRange,lo:lo,hi:hi};
+  var takeTot=r2(sumQty(q)-rest);
+  return {keep:keep,take:take,keepTot:keepTot,takeTot:takeTot,
+          inRange:(keepTot>=lo-0.005 && keepTot<=hi+0.005), lo:lo, hi:hi,
+          empty:sumQty(q)===0};
 }
 
 /* ===================== griglia conteggio ===================== */
@@ -514,34 +554,53 @@ $('uAdd').onclick=function(){ if(locked)return; uscite.push({motivo:'',importo:'
 /* ===================== ricalcolo ===================== */
 function recalc(){
   var full=isFull();
-  var contato=sumQty(qty);
-  var fondo=num($('fFondo').value), corr=num($('fCorr').value),
-      pos=num($('fPos').value), altri=num($('fAltri').value);
+  var contatoP=sumQty(qty);
+  var contatoB = barCheck ? (barCheck.contato||0) : 0;
+  var contatoTot = full ? r2(contatoP+contatoB) : contatoP;
+
+  var fondoP=num($('fFondo').value), fondoB=num($('fFondoBar').value);
+  var corr=num($('fCorr').value), pos=num($('fPos').value), altri=num($('fAltri').value);
   var uTot = full ? uscite.reduce(function(s,u){return s+num(u.importo);},0) : 0;
 
-  $('live').textContent=eur(contato);
-  $('gTot').textContent=eur(contato);
+  $('live').textContent=eur(contatoP);
+  $('gTot').textContent=eur(contatoP);
   $('uTot').textContent=eur(uTot);
 
-  var atteso = full ? r2(fondo+corr-pos-altri-uTot) : null;
-  var diff   = full ? r2(contato-atteso) : null;
-  var ready  = full ? ($('fCorr').value!=='' && contato>0) : contato>0;
+  /* riepilogo delle due casse (solo nella principale) */
+  if(full){
+    $('cTotale').classList.remove('hide');
+    $('tPrinc').textContent=eur(contatoP);
+    $('tBar').textContent = barCheck ? eur(contatoB) : '—';
+    $('tBar').className = 'v'+(barCheck?'':' na');
+    $('tBarK').innerHTML = barCheck
+      ? 'Cassa bar<small>contata da '+(barCheck.by||'—')+'</small>'
+      : 'Cassa bar<small>conteggio non ancora registrato</small>';
+    $('tTot').textContent=eur(contatoTot);
+  } else { $('cTotale').classList.add('hide'); }
+
+  var atteso = full ? r2(fondoP+fondoB+corr-pos-altri-uTot) : null;
+  var diff   = full ? r2(contatoTot-atteso) : null;
+  var ready  = full ? ($('fCorr').value!=='' && contatoP>0 && !!barCheck) : contatoP>0;
 
   var v=$('verd'), big=$('vBig'), sm=$('vSm'), brk=$('vBrk');
-  if(!ready){
+  if(full && !barCheck){
+    v.className='verd warn'; big.textContent='Manca il conteggio del bar';
+    sm.textContent='Registra prima il check della cassa bar per questo turno: serve per la quadratura.';
+    brk.classList.add('hide');
+  } else if(!ready){
     v.className='verd'; big.textContent='—'; brk.classList.add('hide');
     sm.textContent = full ? 'Inserisci corrispettivi e conteggio per vedere l\'esito'
                           : 'Conta il contante per registrare il check';
   } else if(!full){
-    v.className='verd ok'; big.textContent=eur(contato); brk.classList.add('hide');
+    v.className='verd ok'; big.textContent=eur(contatoP); brk.classList.add('hide');
     sm.textContent = turno==='pranzo' ? 'Conteggio di controllo — pronto da salvare'
-                                      : 'Chiusura serale — pronto da salvare';
+                                      : 'Conteggio serale — pronto da salvare';
   } else {
     brk.classList.remove('hide');
-    $('bA').textContent=eur(atteso); $('bC').textContent=eur(contato); $('bD').textContent=sgn(diff);
+    $('bA').textContent=eur(atteso); $('bC').textContent=eur(contatoTot); $('bD').textContent=sgn(diff);
     if(Math.abs(diff)<0.005){
       v.className='verd ok'; big.textContent='✓ Quadra';
-      sm.textContent='Contante contato e atteso coincidono';
+      sm.textContent='Contante delle due casse e atteso coincidono';
     } else if(Math.abs(diff)<=soglia){
       v.className='verd warn';
       big.textContent=(diff<0?'Mancano ':'Eccedenza ')+eur(Math.abs(diff));
@@ -558,7 +617,8 @@ function recalc(){
   $('sLbl').textContent=soglia;
   $('save').disabled = locked || !ready || (needNote && !$('fNota').value.trim());
 
-  calc={contato:contato,fondo:fondo,corr:corr,pos:pos,altri:altri,
+  calc={contatoP:contatoP,contatoB:contatoB,contato:contatoTot,
+        fondoP:fondoP,fondoB:fondoB,corr:corr,pos:pos,altri:altri,
         uTot:uTot,atteso:atteso,diff:diff,ready:ready,full:full};
 
   if(turno==='sera') renderChiusura();
@@ -566,40 +626,66 @@ function recalc(){
 }
 
 /* ===================== chiusura serale ===================== */
+var chiusuraB={keep:{},take:{},keepTot:0,takeTot:0,inRange:true,empty:true};
+
+function chips(obj,cls){
+  var out=ALL.filter(function(v){return obj[v]>0;}).map(function(v){
+    return '<span class="tchip '+cls+'"><span class="q">'+obj[v]+'×</span><span class="t">'+dLab(v)+'</span></span>';
+  }).join('');
+  return out || '<span class="tchip"><span class="t">niente</span></span>';
+}
+function warnTxt(ch,C){
+  return ch.keepTot < ch.lo
+    ? 'Non c\'è abbastanza contante per lasciare il fondo minimo di '+eur(ch.lo)+'.'
+    : 'Con i tagli presenti il fondo più vicino è '+eur(ch.keepTot)+' — servono tagli più piccoli.';
+}
+
 function renderChiusura(){
-  var C=CASSE[cassa];
-  chiusura=computeChiusura();
-  var tot=sumQty(qty);
+  /* la chiusura serale si fa dalla principale e copre entrambe le casse */
+  if(!isFull()){ $('cChiusura').classList.add('hide'); return; }
+  $('cChiusura').classList.remove('hide');
 
-  $('kTake').textContent=eur(chiusura.takeTot);
-  $('kKeep').textContent=eur(chiusura.keepTot);
-  $('kKeep').className='v '+(tot===0?'':(chiusura.inRange?'ok':'bad'));
+  chiusura  = computeChiusura(qty, CASSE.principale, targetOverride);
+  chiusuraB = barCheck ? computeChiusura(barCheck.qty||{}, CASSE.bar, targetOverrideB)
+                       : {keep:{},take:{},keepTot:0,takeTot:0,inRange:true,empty:true};
 
-  function chips(obj,cls){
-    var out=ALL.filter(function(v){return obj[v]>0;}).map(function(v){
-      return '<span class="tchip '+cls+'"><span class="q">'+obj[v]+'×</span><span class="t">'+dLab(v)+'</span></span>';
-    }).join('');
-    return out || '<span class="tchip"><span class="t">niente</span></span>';
-  }
+  $('kTake').textContent=eur(r2(chiusura.takeTot+chiusuraB.takeTot));
+  $('kKeep').textContent=eur(r2(chiusura.keepTot+chiusuraB.keepTot));
+  $('kKeep').className='v '+((chiusura.empty&&chiusuraB.empty)?''
+    :((chiusura.inRange&&(chiusuraB.empty||chiusuraB.inRange))?'ok':'bad'));
+
   $('takeList').innerHTML=chips(chiusura.take,'take');
   $('keepList').innerHTML=chips(chiusura.keep,'');
-
+  $('hP').textContent='Cassa principale — resta '+eur(chiusura.keepTot);
   var w=$('kWarn');
-  if(tot===0){ w.classList.add('hide'); }
-  else if(!chiusura.inRange){
-    w.classList.remove('hide');
-    w.textContent = chiusura.keepTot < chiusura.lo
-      ? 'In cassa non c\'è abbastanza contante per lasciare il fondo minimo di '+eur(chiusura.lo)+'.'
-      : 'Con i tagli presenti il fondo più vicino è '+eur(chiusura.keepTot)+' — servono tagli più piccoli.';
-  } else { w.classList.add('hide'); }
+  if(chiusura.empty || chiusura.inRange) w.classList.add('hide');
+  else { w.classList.remove('hide'); w.textContent=warnTxt(chiusura,CASSE.principale); }
+
+  if(!barCheck){
+    $('barBlock').classList.add('hide');
+  } else {
+    $('barBlock').classList.remove('hide');
+    $('takeListB').innerHTML=chips(chiusuraB.take,'take');
+    $('keepListB').innerHTML=chips(chiusuraB.keep,'');
+    $('hB').textContent='Cassa bar — resta '+eur(chiusuraB.keepTot);
+    var wb=$('kWarnB');
+    if(chiusuraB.empty || chiusuraB.inRange) wb.classList.add('hide');
+    else { wb.classList.remove('hide'); wb.textContent=warnTxt(chiusuraB,CASSE.bar); }
+    if(document.activeElement!==$('fTargetB'))
+      $('fTargetB').value = targetOverrideB!==null ? targetOverrideB : '';
+    $('fTargetB').placeholder='auto';
+  }
 
   if(document.activeElement!==$('fTarget'))
     $('fTarget').value = targetOverride!==null ? targetOverride : '';
-  $('fTarget').placeholder = 'auto';
+  $('fTarget').placeholder='auto';
 }
 $('fTarget').oninput=function(){ if(locked)return;
   var v=$('fTarget').value; targetOverride = (v==='')?null:num(v); renderChiusura(); };
 $('tReset').onclick=function(){ if(locked)return; targetOverride=null; $('fTarget').value=''; renderChiusura(); };
+$('fTargetB').oninput=function(){ if(locked)return;
+  var v=$('fTargetB').value; targetOverrideB = (v==='')?null:num(v); renderChiusura(); };
+$('tResetB').onclick=function(){ if(locked)return; targetOverrideB=null; $('fTargetB').value=''; renderChiusura(); };
 
 /* ===================== confronto col pranzo ===================== */
 function renderConfronto(){
@@ -660,10 +746,13 @@ function buildSummary(){
   var C=CASSE[cassa], L=[];
   L.push(C.nome.toUpperCase()+' — '+(turno==='pranzo'?'Check pranzo':'Chiusura serale'));
   L.push(fmtD(date));
+  var me = savedBy || (fbAuth.currentUser ? (fbAuth.currentUser.email||'') : '');
+  if(me) L.push('Operatore: '+String(me).split('@')[0]);
   L.push(new Array(34).join('─'));
 
   if(calc.full){
-    L.push(ln('Fondo iniziale', eur(calc.fondo)));
+    L.push(ln('Fondo principale', eur(calc.fondoP)));
+    L.push(ln('Fondo bar', eur(calc.fondoB)));
     L.push(ln('Corrispettivi', eur(calc.corr)));
     if(calc.pos)   L.push(ln('POS / carte','− '+eur(calc.pos)));
     if(calc.altri) L.push(ln('Altri elettronici','− '+eur(calc.altri)));
@@ -674,12 +763,14 @@ function buildSummary(){
       });
     }
     L.push(new Array(34).join('─'));
+    L.push(ln('Contante principale', eur(calc.contatoP)));
+    L.push(ln('Contante bar', eur(calc.contatoB)));
+    L.push(ln('Contante totale', eur(calc.contato)));
     L.push(ln('Contante atteso', eur(calc.atteso)));
-    L.push(ln('Contante contato', eur(calc.contato)));
     L.push(new Array(34).join('─'));
     L.push(Math.abs(calc.diff)<0.005 ? ln('QUADRA','✓') : ln('DIFFERENZA', sgn(calc.diff)));
   } else {
-    L.push(ln('Contante contato', eur(calc.contato)));
+    L.push(ln('Contante contato', eur(calc.contatoP)));
   }
 
   if(turno==='sera' && refPranzo){
@@ -688,7 +779,7 @@ function buildSummary(){
     L.push('');
     if(!hasDiff){
       L.push(ln('Contato a pranzo', eur(refPranzo.contato)+' ('+ora+')'));
-      L.push(ln('Variazione', sgn(r2(calc.contato-refPranzo.contato))));
+      L.push(ln('Variazione', sgn(r2(calc.contatoP-refPranzo.contato))));
     } else if(calc.full && calc.ready){
       L.push('Ripartizione della differenza');
       L.push(ln('  al check pranzo', Math.abs(refPranzo.diff)<0.005?'✓':sgn(refPranzo.diff)));
@@ -698,18 +789,29 @@ function buildSummary(){
 
   var t=ALL.filter(function(v){return qty[v]>0;});
   if(t.length){
-    L.push(''); L.push('Dettaglio conteggio');
+    L.push(''); L.push('Dettaglio conteggio '+(calc.full?'principale':C.nome.toLowerCase()));
     t.forEach(function(v){ L.push('  '+pad(dLab(v)+' × '+qty[v],17)+padL(eur(qty[v]*v),13)); });
   }
 
-  if(turno==='sera' && calc.contato>0){
+  if(calc.full && turno==='sera'){
     L.push(''); L.push('CHIUSURA');
-    L.push(ln('Prelevato', eur(chiusura.takeTot)));
-    L.push(ln('Resta in cassa', eur(chiusura.keepTot)));
+    L.push(ln('Prelevato in tutto', eur(r2(chiusura.takeTot+chiusuraB.takeTot))));
+    L.push('');
+    L.push('Cassa principale — resta '+eur(chiusura.keepTot));
     ALL.filter(function(v){return chiusura.keep[v]>0;}).forEach(function(v){
       L.push('  '+pad(dLab(v)+' × '+chiusura.keep[v],17)+padL(eur(chiusura.keep[v]*v),13));
     });
-    if(!chiusura.inRange) L.push('  ⚠ fuori dal range '+eur(C.min)+' – '+eur(C.max));
+    if(!chiusura.empty && !chiusura.inRange)
+      L.push('  ⚠ fuori dal range '+eur(CASSE.principale.min)+' – '+eur(CASSE.principale.max));
+    if(barCheck){
+      L.push('');
+      L.push('Cassa bar — resta '+eur(chiusuraB.keepTot));
+      ALL.filter(function(v){return chiusuraB.keep[v]>0;}).forEach(function(v){
+        L.push('  '+pad(dLab(v)+' × '+chiusuraB.keep[v],17)+padL(eur(chiusuraB.keep[v]*v),13));
+      });
+      if(!chiusuraB.empty && !chiusuraB.inRange)
+        L.push('  ⚠ fuori dal range '+eur(CASSE.bar.min)+' – '+eur(CASSE.bar.max));
+    }
   }
 
   var nota=$('fNota').value.trim();
@@ -758,7 +860,9 @@ $('bDl').onclick=function(){
 function setLocked(v){
   locked=v;
   document.body.classList.toggle('locked',v);
-  $('lockB').innerHTML = v?'<span class="badge">Salvato</span>':'';
+  $('lockB').innerHTML = v
+    ? '<span class="badge">Salvato</span>'+(savedBy?' <span class="byline">da '+String(savedBy).split('@')[0]+'</span>':'')
+    : '';
   $('unlock').classList.toggle('hide',!v);
   $('save').textContent = v?'Check salvato':'Salva check';
   if(v) $('save').disabled=true;
@@ -772,12 +876,24 @@ $('unlock').onclick=function(){
 async function load(){
   var C=CASSE[cassa], full=C.full;
   $('msg').textContent='';
-  qty={}; uscite=[]; targetOverride=null;
+  qty={}; uscite=[]; targetOverride=null; targetOverrideB=null; savedBy='';
   $('fNota').value=''; $('fCorr').value=''; $('fPos').value=''; $('fAltri').value='';
 
-  lastFondo=null;
+  /* ultimo fondo lasciato in ciascuna cassa */
+  lastFondo=null; lastFondoBar=null;
   var lf=await store.get('fondo:'+cassa);
   if(lf){ try{ var o=JSON.parse(lf); if(o && o.qty) lastFondo=o; }catch(e){} }
+  if(full){
+    var lb=await store.get('fondo:bar');
+    if(lb){ try{ var ob=JSON.parse(lb); if(ob && ob.qty) lastFondoBar=ob; }catch(e){} }
+  }
+
+  /* conteggio del bar dello stesso giorno e turno */
+  barCheck=null;
+  if(full){
+    var bc=await store.get(key('bar',date,turno));
+    if(bc){ try{ barCheck=JSON.parse(bc); }catch(e){} }
+  }
 
   refPranzo=null;
   if(turno==='sera'){
@@ -793,23 +909,27 @@ async function load(){
   $('dLbl').textContent=fmtD(date);
   $('cIncassi').classList.toggle('hide',!full);
   $('cUscite').classList.toggle('hide',!full);
-  $('cChiusura').classList.toggle('hide',turno!=='sera');
+  $('cChiusura').classList.toggle('hide', !(full && turno==='sera'));
   $('incTitle').textContent = turno==='pranzo'?'Incassi del pranzo':'Incassi dell\'intera giornata';
   $('corrHint').textContent = turno==='pranzo'?'lettura non fiscale a fine pranzo':'totale giornata dalla chiusura RT';
-  $('fondoHint').textContent = 'range previsto '+eur(C.min)+' – '+eur(C.max);
-  $('fFondo').value = (lastFondo && lastFondo.total) ? lastFondo.total : C.max;
+  $('fondoHint').textContent = 'range '+eur(CASSE.principale.min)+' – '+eur(CASSE.principale.max);
+  $('fondoBarHint').textContent = 'range '+eur(CASSE.bar.min)+' – '+eur(CASSE.bar.max);
+  $('fFondo').value    = (lastFondo && lastFondo.total) ? lastFondo.total : CASSE.principale.max;
+  $('fFondoBar').value = (lastFondoBar && lastFondoBar.total) ? lastFondoBar.total : CASSE.bar.max;
 
   var raw=await store.get(key(cassa,date,turno));
   if(raw){
     try{
       var e=JSON.parse(raw);
-      qty=e.qty||{}; uscite=e.uscite||[];
-      if(e.fondo!==undefined && e.fondo!==null) $('fFondo').value=e.fondo;
+      qty=e.qty||{}; uscite=e.uscite||[]; savedBy=e.by||'';
+      if(e.fondoP!==undefined && e.fondoP!==null) $('fFondo').value=e.fondoP;
+      if(e.fondoB!==undefined && e.fondoB!==null) $('fFondoBar').value=e.fondoB;
       $('fCorr').value = (e.corr===undefined||e.corr===null)?'':e.corr;
       $('fPos').value  = (e.pos===undefined ||e.pos===null) ?'':e.pos;
       $('fAltri').value= (e.altri===undefined||e.altri===null)?'':e.altri;
       $('fNota').value = e.nota||'';
       if(e.target!==undefined && e.target!==null) targetOverride=e.target;
+      if(e.targetB!==undefined && e.targetB!==null) targetOverrideB=e.targetB;
       setLocked(true);
     }catch(err){ setLocked(false); }
   } else { setLocked(false); }
@@ -821,28 +941,43 @@ async function load(){
 /* ===================== salvataggio ===================== */
 $('save').onclick=async function(){
   if(locked)return;
-  var p={ qty:qty, contato:calc.contato, nota:$('fNota').value.trim(), ts:Date.now() };
+  var me = fbAuth.currentUser ? (fbAuth.currentUser.email||'') : '';
+  var p={ qty:qty, contato:calc.contatoP, nota:$('fNota').value.trim(), by:me, ts:Date.now() };
+
   if(calc.full){
-    p.uscite=uscite; p.fondo=calc.fondo; p.corr=calc.corr; p.pos=calc.pos;
-    p.altri=calc.altri; p.uTot=calc.uTot; p.atteso=calc.atteso; p.diff=calc.diff;
+    p.uscite=uscite; p.fondoP=calc.fondoP; p.fondoB=calc.fondoB;
+    p.corr=calc.corr; p.pos=calc.pos; p.altri=calc.altri; p.uTot=calc.uTot;
+    p.contatoBar=calc.contatoB; p.contatoTot=calc.contato;
+    p.atteso=calc.atteso; p.diff=calc.diff;
+    if(turno==='sera'){
+      p.keep=chiusura.keep;  p.keepTot=chiusura.keepTot;  p.takeTot=chiusura.takeTot;  p.target=targetOverride;
+      p.keepB=chiusuraB.keep;p.keepTotB=chiusuraB.keepTot;p.takeTotB=chiusuraB.takeTot;p.targetB=targetOverrideB;
+    }
   }
-  if(turno==='sera'){
-    p.keep=chiusura.keep; p.keepTot=chiusura.keepTot;
-    p.take=chiusura.take; p.takeTot=chiusura.takeTot; p.target=targetOverride;
-  }
+
   var ok=await store.set(key(cassa,date,turno),JSON.stringify(p));
   if(!ok){ $('msg').textContent='Salvataggio non riuscito.'; return; }
+  savedBy=me;
 
   hist=hist.filter(function(h){ return !(h.c===cassa&&h.d===date&&h.t===turno); });
-  hist.push({c:cassa,d:date,t:turno,diff:calc.full?calc.diff:null,contato:calc.contato});
+  hist.push({c:cassa,d:date,t:turno,diff:calc.full?calc.diff:null,
+             contato:calc.full?calc.contato:calc.contatoP, by:me});
   hist.sort(function(a,b){ return b.d.localeCompare(a.d) || (a.t==='sera'?-1:1); });
   if(hist.length>150) hist=hist.slice(0,150);
   await store.set('hist',JSON.stringify(hist));
 
-  if(turno==='sera' && chiusura.keepTot>0 && (!lastFondo || date>=lastFondo.date)){
-    var k={}; ALL.forEach(function(v){ if(chiusura.keep[v]>0) k[v]=chiusura.keep[v]; });
-    lastFondo={qty:k,total:chiusura.keepTot,date:date};
-    await store.set('fondo:'+cassa,JSON.stringify(lastFondo));
+  /* la chiusura serale della principale fissa il fondo di entrambe le casse */
+  if(calc.full && turno==='sera'){
+    if(chiusura.keepTot>0 && (!lastFondo || date>=lastFondo.date)){
+      var k={}; ALL.forEach(function(v){ if(chiusura.keep[v]>0) k[v]=chiusura.keep[v]; });
+      lastFondo={qty:k,total:chiusura.keepTot,date:date};
+      await store.set('fondo:principale',JSON.stringify(lastFondo));
+    }
+    if(chiusuraB.keepTot>0 && (!lastFondoBar || date>=lastFondoBar.date)){
+      var kb={}; ALL.forEach(function(v){ if(chiusuraB.keep[v]>0) kb[v]=chiusuraB.keep[v]; });
+      lastFondoBar={qty:kb,total:chiusuraB.keepTot,date:date};
+      await store.set('fondo:bar',JSON.stringify(lastFondoBar));
+    }
   }
 
   setLocked(true); $('msg').textContent='Check salvato.'; showShare(); renderHist();
@@ -857,7 +992,8 @@ function renderHist(){
     var b=document.createElement('button'); b.className='hrow';
     var d=document.createElement('span'); d.className='hdot '+h.c;
     var t=document.createElement('span'); t.className='htxt';
-    t.innerHTML=fmtD(h.d)+'<small>'+CASSE[h.c].nome+' · '+(h.t==='pranzo'?'Pranzo':'Sera')+'</small>';
+    var who = h.by ? ' · '+String(h.by).split('@')[0] : '';
+    t.innerHTML=fmtD(h.d)+'<small>'+CASSE[h.c].nome+' · '+(h.t==='pranzo'?'Pranzo':'Sera')+who+'</small>';
     var a=document.createElement('span');
     if(h.diff===null||h.diff===undefined){ a.className='hamt na'; a.textContent=eur(h.contato||0); }
     else {
