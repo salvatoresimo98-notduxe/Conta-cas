@@ -178,6 +178,31 @@ textarea:focus{border-color:var(--ink);}
 
 .locked input,.locked textarea,.locked .dstep,.locked .add,.locked .x{pointer-events:none;opacity:.7;}
 
+/* ============ integrazione fondo ============ */
+.integ{background:var(--bg);border-radius:10px;padding:11px;margin-top:10px;}
+.integ .ih{font-size:.75rem;font-weight:700;color:var(--soft);margin-bottom:8px;}
+.integ .isrc{display:flex;gap:2px;background:var(--card);border-radius:8px;padding:3px;margin-bottom:9px;}
+.integ .isrc button{flex:1;border:none;background:none;font-size:.75rem;font-weight:700;
+  color:var(--faint);padding:6px 8px;border-radius:6px;}
+.integ .isrc button.on{background:var(--bg);color:var(--ink);}
+.integ .isrc button:disabled{opacity:.4;}
+.igrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:5px;margin-bottom:9px;}
+.icell{display:flex;align-items:center;gap:3px;background:var(--card);border:1px solid var(--rule);
+  border-radius:8px;padding:4px 5px;}
+.icell.on{border-color:var(--ink);}
+.icell .il{font-family:'JetBrains Mono',monospace;font-size:.7rem;font-weight:700;flex:1;text-align:center;}
+.icell button{width:22px;height:24px;border:none;background:var(--bg);border-radius:5px;
+  color:var(--soft);font-size:.85rem;line-height:1;padding:0;flex-shrink:0;}
+.icell .iq{font-family:'JetBrains Mono',monospace;font-size:.8rem;font-weight:700;
+  width:20px;text-align:center;flex-shrink:0;}
+.integ .irow{display:flex;justify-content:space-between;align-items:center;gap:8px;
+  font-size:.78rem;font-weight:700;padding-top:8px;border-top:1px solid var(--rule);}
+.integ .irow .v{font-family:'JetBrains Mono',monospace;}
+.integ .irow .v.ok{color:var(--green);} .integ .irow .v.bad{color:var(--red);}
+.integ .iauto{border:1px dashed var(--rule);background:none;color:var(--soft);
+  font-size:.74rem;font-weight:700;padding:7px;border-radius:8px;width:100%;margin-bottom:9px;}
+.integ .inote{font-size:.71rem;color:var(--faint);margin-top:6px;}
+
 /* ============ banner conteggio ripreso ============ */
 .prefill{
   display:flex;align-items:center;gap:8px;
@@ -354,6 +379,7 @@ textarea:focus{border-color:var(--ink);}
       <div class="sublab">Lascia in cassa</div>
       <div class="taglist" id="keepList"></div>
       <div class="warnline hide" id="kWarn"></div>
+      <div class="integ hide" id="intP"></div>
       <div class="tgt">
         <label>Fondo da lasciare</label>
         <span class="cur">€</span>
@@ -368,6 +394,7 @@ textarea:focus{border-color:var(--ink);}
         <div class="sublab">Lascia in cassa</div>
         <div class="taglist" id="keepListB"></div>
         <div class="warnline hide" id="kWarnB"></div>
+        <div class="integ hide" id="intB"></div>
         <div class="tgt">
           <label>Fondo da lasciare</label>
           <span class="cur">€</span>
@@ -452,6 +479,7 @@ var COINS = [2,1,0.5,0.2,0.1,0.05];
 var ALL   = NOTES.concat(COINS);
 var BIG   = [100,50];      // mai lasciati nel fondo: non danno resto
 var SMALL = [20,10,5];     // banconote utilizzabili come resto
+var INTEG = [20,10,5,2,1,0.5,0.2,0.1,0.05];  // tagli ammessi per integrare il fondo
 
 /* ===================== stato ===================== */
 var cassa='principale', turno='pranzo', date=today();
@@ -459,6 +487,7 @@ var qty={}, uscite=[], soglia=5, locked=false, hist=[];
 var lastFondo=null, lastFondoBar=null, refPranzo=null;
 var targetOverride=null, targetOverrideB=null;
 var barCheck=null, savedBy='', prefillLabel='';
+var integ={ principale:{src:'riserva',qty:{}}, bar:{src:'altra',qty:{}} };
 var calc={}, chiusura={keep:{},take:{},keepTot:0,takeTot:0,inRange:true};
 
 /* ===================== storage (Firestore) =====================
@@ -719,6 +748,117 @@ function warnTxt(ch,C){
   return 'Con i tagli presenti il fondo più vicino è '+eur(ch.keepTot)+' — servono tagli più piccoli.';
 }
 
+/* ============ integrazione del fondo ============
+   Quando in cassa non ci sono abbastanza tagli piccoli, il fondo
+   si completa spostandoli dall'altra cassa o prendendoli dalla
+   riserva. Lo spostamento non cambia il contante totale, quindi
+   non tocca la quadratura; l'integrazione da riserva viene
+   registrata nel fondo di domani.                                */
+function integTot(t){ return sumQty(integ[t].qty); }
+
+function proposeInteg(current, lo, hi, avail){
+  /* copre lo scoperto col minor numero di pezzi, senza usare
+     tagli più grandi di quanto serve davvero */
+  var add={}, tot=current, need=r2(lo-current), i, d, can;
+  if(need<=0) return {add:add, tot:tot};
+
+  for(i=0;i<INTEG.length;i++){          // dal più grande al più piccolo
+    d=INTEG[i];
+    can = avail ? (avail[d]||0) : 1e9;
+    while(can>0 && d <= need+0.005 && r2(tot+d) <= hi+0.005){
+      add[d]=(add[d]||0)+1; tot=r2(tot+d); need=r2(need-d); can--;
+    }
+  }
+  /* se resta uno scoperto non divisibile, aggiungi il taglio
+     più piccolo disponibile che lo copre */
+  if(need>0.005){
+    for(i=INTEG.length-1;i>=0;i--){
+      d=INTEG[i];
+      can = avail ? (avail[d]||0) : 1e9;
+      if(can>0 && d>=need-0.005 && r2(tot+d)<=hi+0.005){
+        add[d]=(add[d]||0)+1; tot=r2(tot+d); need=0; break;
+      }
+    }
+  }
+  return {add:add, tot:tot};
+}
+
+function renderInteg(till, ch, boxId, donorCh){
+  var box=$(boxId), st=integ[till], C=CASSE[till];
+  var canTransfer = !!donorCh;
+  if(!st.src || (st.src==='altra' && !canTransfer)) st.src='riserva';
+
+  var base = (ch.base!==undefined) ? ch.base : ch.keepTot;
+  var added=integTot(till);
+  var finale=r2(base+added);
+
+  var h='<div class="ih">Integra il fondo — mancano '+eur(Math.max(0,r2(ch.lo-base)))+
+        ' per arrivare a '+eur(ch.lo)+'</div>';
+  h+='<div class="isrc">'+
+     '<button data-s="altra"'+(canTransfer?'':' disabled')+(st.src==='altra'?' class="on"':'')+'>'+
+     (till==='bar'?'Dalla principale':'Dal bar')+'</button>'+
+     '<button data-s="riserva"'+(st.src==='riserva'?' class="on"':'')+'>Da riserva</button>'+
+     '</div>';
+  h+='<button class="iauto">Proponi i tagli</button>';
+  h+='<div class="igrid">';
+  INTEG.forEach(function(d){
+    var q=st.qty[d]||0;
+    h+='<div class="icell'+(q?' on':'')+'"><button data-d="'+d+'" data-o="-">−</button>'+
+       '<span class="il">'+dLab(d)+'</span>'+
+       '<span class="iq">'+q+'</span>'+
+       '<button data-d="'+d+'" data-o="+">+</button></div>';
+  });
+  h+='</div>';
+  h+='<div class="irow"><span>Fondo dopo l\'integrazione</span><span class="v '+
+     ((finale>=C.min-0.005&&finale<=C.max+0.005)?'ok':'bad')+'">'+eur(finale)+'</span></div>';
+  if(st.src==='altra' && canTransfer)
+    h+='<div class="inote">Spostamento tra casse: il contante totale non cambia.</div>';
+  else if(added>0)
+    h+='<div class="inote">'+eur(added)+' aggiunti dalla riserva: entreranno nel fondo di domani.</div>';
+  box.innerHTML=h;
+  box.classList.remove('hide');
+
+  Array.prototype.forEach.call(box.querySelectorAll('.isrc button'), function(b){
+    b.onclick=function(){ if(locked||b.disabled)return; st.src=b.dataset.s; st.qty={}; renderChiusura(); };
+  });
+  box.querySelector('.iauto').onclick=function(){
+    if(locked)return;
+    var avail = (st.src==='altra' && donorCh) ? donorCh.keep : null;
+    st.qty = proposeInteg(base, ch.lo, ch.hi, avail).add;
+    renderChiusura();
+  };
+  Array.prototype.forEach.call(box.querySelectorAll('.icell button'), function(b){
+    b.onclick=function(){
+      if(locked)return;
+      var d=parseFloat(b.dataset.d), q=st.qty[d]||0;
+      if(b.dataset.o==='+'){
+        if(st.src==='altra' && donorCh && q >= (donorCh.keep[d]||0)) return;
+        st.qty[d]=q+1;
+      } else { st.qty[d]=Math.max(0,q-1); }
+      renderChiusura();
+    };
+  });
+}
+
+/* applica l'integrazione al risultato di una cassa */
+function applyInteg(till, ch, donorCh){
+  var st=integ[till], moved=false;
+  if(ch.base===undefined) ch.base=ch.keepTot;   /* valore prima dell'integrazione */
+  INTEG.forEach(function(d){
+    var q=st.qty[d]||0; if(!q) return;
+    if(st.src==='altra' && donorCh){
+      var avail=donorCh.keep[d]||0;
+      q=Math.min(q,avail);
+      if(q>0){ donorCh.keep[d]=avail-q; moved=true; }
+    }
+    if(q>0) ch.keep[d]=(ch.keep[d]||0)+q;
+  });
+  ch.keepTot = sumQty(ch.keep);
+  if(moved) donorCh.keepTot = sumQty(donorCh.keep);
+  ch.inRange = ch.keepTot>=ch.lo-0.005 && ch.keepTot<=ch.hi+0.005;
+  ch.integrato = sumQty(st.qty)>0 ? {src:st.src, tot:sumQty(st.qty)} : null;
+}
+
 function renderChiusura(){
   if(turno!=='sera'){ $('cChiusura').classList.add('hide'); return; }
   $('cChiusura').classList.remove('hide');
@@ -727,6 +867,9 @@ function renderChiusura(){
   if(!isFull()){
     chiusura  = computeChiusura(qty, CASSE.bar, targetOverride);
     chiusuraB = {keep:{},take:{},keepTot:0,takeTot:0,inRange:true,empty:true};
+      if(chiusura.keepTot >= chiusura.lo - 0.005) integ.bar.qty={};
+    if(!chiusura.empty && (chiusura.keepTot < chiusura.lo || integTot('bar')>0))
+      applyInteg('bar', chiusura, null);
     $('kTakeL').textContent='Da prelevare';
     $('kKeepL').textContent='Resta in cassa';
     $('kTake').textContent=eur(chiusura.takeTot);
@@ -739,6 +882,10 @@ function renderChiusura(){
     var wb0=$('kWarn');
     if(chiusura.empty || chiusura.inRange) wb0.classList.add('hide');
     else { wb0.classList.remove('hide'); wb0.textContent=warnTxt(chiusura,CASSE.bar); }
+    if(!chiusura.empty && (chiusura.keepTot<chiusura.lo || integTot('bar')>0))
+      renderInteg('bar', chiusura, 'intP', null);
+    else { $('intP').classList.add('hide'); }
+    $('intB').classList.add('hide');
     $('barBlock').classList.add('hide');
     if(document.activeElement!==$('fTarget'))
       $('fTarget').value = targetOverride!==null ? targetOverride : '';
@@ -750,6 +897,14 @@ function renderChiusura(){
   chiusura  = computeChiusura(qty, CASSE.principale, targetOverride);
   chiusuraB = barCheck ? computeChiusura(barCheck.qty||{}, CASSE.bar, targetOverrideB)
                        : {keep:{},take:{},keepTot:0,takeTot:0,inRange:true,empty:true};
+
+  /* il bar può attingere dalla principale e viceversa */
+  if(chiusuraB.keepTot >= chiusuraB.lo-0.005) integ.bar.qty={};
+  if(chiusura.keepTot  >= chiusura.lo -0.005) integ.principale.qty={};
+  if(!chiusuraB.empty && (chiusuraB.keepTot<chiusuraB.lo || integTot('bar')>0))
+    applyInteg('bar', chiusuraB, integ.bar.src==='altra' ? chiusura : null);
+  if(!chiusura.empty && (chiusura.keepTot<chiusura.lo || integTot('principale')>0))
+    applyInteg('principale', chiusura, integ.principale.src==='altra' ? chiusuraB : null);
 
   $('kTakeL').textContent = barCheck ? 'Da prelevare in tutto' : 'Da prelevare';
   $('kKeepL').textContent = barCheck ? 'Resta nelle casse' : 'Resta in cassa';
@@ -764,6 +919,9 @@ function renderChiusura(){
   var w=$('kWarn');
   if(chiusura.empty || chiusura.inRange) w.classList.add('hide');
   else { w.classList.remove('hide'); w.textContent=warnTxt(chiusura,CASSE.principale); }
+  if(!chiusura.empty && (chiusura.keepTot<chiusura.lo || integTot('principale')>0))
+    renderInteg('principale', chiusura, 'intP', barCheck?chiusuraB:null);
+  else { $('intP').classList.add('hide'); }
 
   if(!barCheck){
     $('barBlock').classList.add('hide');
@@ -775,6 +933,9 @@ function renderChiusura(){
     var wb=$('kWarnB');
     if(chiusuraB.empty || chiusuraB.inRange) wb.classList.add('hide');
     else { wb.classList.remove('hide'); wb.textContent=warnTxt(chiusuraB,CASSE.bar); }
+    if(!chiusuraB.empty && (chiusuraB.keepTot<chiusuraB.lo || integTot('bar')>0))
+      renderInteg('bar', chiusuraB, 'intB', chiusura);
+    else { $('intB').classList.add('hide'); }
     if(document.activeElement!==$('fTargetB'))
       $('fTargetB').value = targetOverrideB!==null ? targetOverrideB : '';
     $('fTargetB').placeholder='auto';
@@ -904,6 +1065,9 @@ function buildSummary(){
       L.push('  '+pad(dLab(v)+' × '+chiusura.take[v],17)+padL(eur(chiusura.take[v]*v),13));
     });
     L.push('');
+    if(chiusura.integrato)
+      L.push(ln('Integrato', eur(chiusura.integrato.tot)+
+        (chiusura.integrato.src==='altra'?' (altra cassa)':' (riserva)')));
     L.push('Resta in cassa '+eur(chiusura.keepTot));
     ALL.filter(function(v){return chiusura.keep[v]>0;}).forEach(function(v){
       L.push('  '+pad(dLab(v)+' × '+chiusura.keep[v],17)+padL(eur(chiusura.keep[v]*v),13));
@@ -920,6 +1084,9 @@ function buildSummary(){
     ALL.filter(function(v){return chiusura.take[v]>0;}).forEach(function(v){
       L.push('  '+pad(dLab(v)+' × '+chiusura.take[v],17)+padL(eur(chiusura.take[v]*v),13));
     });
+    if(chiusura.integrato)
+      L.push('  integrato '+eur(chiusura.integrato.tot)+
+        (chiusura.integrato.src==='altra'?' dal bar':' da riserva'));
     L.push('Cassa principale — resta '+eur(chiusura.keepTot));
     ALL.filter(function(v){return chiusura.keep[v]>0;}).forEach(function(v){
       L.push('  '+pad(dLab(v)+' × '+chiusura.keep[v],17)+padL(eur(chiusura.keep[v]*v),13));
@@ -932,6 +1099,9 @@ function buildSummary(){
       ALL.filter(function(v){return chiusuraB.take[v]>0;}).forEach(function(v){
         L.push('  '+pad(dLab(v)+' × '+chiusuraB.take[v],17)+padL(eur(chiusuraB.take[v]*v),13));
       });
+      if(chiusuraB.integrato)
+        L.push('  integrato '+eur(chiusuraB.integrato.tot)+
+          (chiusuraB.integrato.src==='altra'?' dalla principale':' da riserva'));
       L.push('Cassa bar — resta '+eur(chiusuraB.keepTot));
       ALL.filter(function(v){return chiusuraB.keep[v]>0;}).forEach(function(v){
         L.push('  '+pad(dLab(v)+' × '+chiusuraB.keep[v],17)+padL(eur(chiusuraB.keep[v]*v),13));
@@ -1005,6 +1175,7 @@ async function load(){
   var C=CASSE[cassa], full=C.full;
   $('msg').textContent='';
   qty={}; uscite=[]; targetOverride=null; targetOverrideB=null; savedBy=''; prefillLabel='';
+  integ={ principale:{src:'riserva',qty:{}}, bar:{src:'altra',qty:{}} };
   $('fNota').value=''; $('fCorr').value=''; $('fPos').value=''; $('fAltri').value='';
 
   /* ultimo fondo lasciato in ciascuna cassa */
@@ -1058,6 +1229,7 @@ async function load(){
       $('fNota').value = e.nota||'';
       if(e.target!==undefined && e.target!==null) targetOverride=e.target;
       if(e.targetB!==undefined && e.targetB!==null) targetOverrideB=e.targetB;
+      if(e.integ) integ=e.integ;
       setLocked(true);
     }catch(err){ setLocked(false); }
   } else { setLocked(false); applyPrefill(); }
@@ -1073,7 +1245,7 @@ $('save').onclick=async function(){
   var p={ qty:qty, contato:calc.contatoP, nota:$('fNota').value.trim(), by:me, ts:Date.now() };
   if(!calc.full && turno==='sera'){
     p.keep=chiusura.keep; p.keepTot=chiusura.keepTot;
-    p.takeTot=chiusura.takeTot; p.target=targetOverride;
+    p.takeTot=chiusura.takeTot; p.target=targetOverride; p.integ=integ;
   }
 
   if(calc.full){
@@ -1084,6 +1256,7 @@ $('save').onclick=async function(){
     if(turno==='sera'){
       p.keep=chiusura.keep;  p.keepTot=chiusura.keepTot;  p.takeTot=chiusura.takeTot;  p.target=targetOverride;
       p.keepB=chiusuraB.keep;p.keepTotB=chiusuraB.keepTot;p.takeTotB=chiusuraB.takeTot;p.targetB=targetOverrideB;
+      p.integ=integ;
     }
   }
 
