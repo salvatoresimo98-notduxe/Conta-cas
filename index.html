@@ -450,6 +450,8 @@ var CASSE = {
 var NOTES = [100,50,20,10,5];
 var COINS = [2,1,0.5,0.2,0.1,0.05];
 var ALL   = NOTES.concat(COINS);
+var BIG   = [100,50];      // mai lasciati nel fondo: non danno resto
+var SMALL = [20,10,5];     // banconote utilizzabili come resto
 
 /* ===================== stato ===================== */
 var cassa='principale', turno='pranzo', date=today();
@@ -503,22 +505,44 @@ function computeChiusura(q, C, override){
   var hi = (override!==null && override!==undefined) ? override : C.max;
   var keep={}, take={}, i, v;
   ALL.forEach(function(d){ keep[d]=q[d]||0; });
-  var rest=sumQty(keep);
 
+  /* 1. le banconote da 50 e 100 escono sempre: nel fondo
+        non servirebbero a dare resto */
+  BIG.forEach(function(d){
+    if(keep[d]>0){ take[d]=keep[d]; keep[d]=0; }
+  });
+  var rest=sumQty(keep);
+  var bigOut = sumQty(take)>0;
+
+  /* 2. poi si tolgono banconote, dalla più grande alla più piccola */
   if(rest>hi){
-    for(i=0;i<ALL.length;i++){
-      v=ALL[i];
+    for(i=0;i<SMALL.length;i++){
+      v=SMALL[i];
       while(keep[v]>0 && rest>hi && r2(rest-v)>=lo){
         keep[v]--; take[v]=(take[v]||0)+1; rest=r2(rest-v);
       }
       if(rest<=hi) break;
     }
   }
+
+  /* 3. le monete si toccano solo se non c'è altro modo
+        di rientrare nel range */
+  var coinsOut=false;
+  if(rest>hi){
+    for(i=0;i<COINS.length;i++){
+      v=COINS[i];
+      while(keep[v]>0 && rest>hi && r2(rest-v)>=lo){
+        keep[v]--; take[v]=(take[v]||0)+1; rest=r2(rest-v); coinsOut=true;
+      }
+      if(rest<=hi) break;
+    }
+  }
+
   var keepTot=r2(rest);
   var takeTot=r2(sumQty(q)-rest);
   return {keep:keep,take:take,keepTot:keepTot,takeTot:takeTot,
           inRange:(keepTot>=lo-0.005 && keepTot<=hi+0.005), lo:lo, hi:hi,
-          empty:sumQty(q)===0};
+          bigOut:bigOut, coinsOut:coinsOut, empty:sumQty(q)===0};
 }
 
 /* ============ conteggio ripreso dall'ultimo registrato ============
@@ -686,9 +710,13 @@ function chips(obj,cls){
   return out || '<span class="tchip"><span class="t">niente</span></span>';
 }
 function warnTxt(ch,C){
-  return ch.keepTot < ch.lo
-    ? 'Non c\'è abbastanza contante per lasciare il fondo minimo di '+eur(ch.lo)+'.'
-    : 'Con i tagli presenti il fondo più vicino è '+eur(ch.keepTot)+' — servono tagli più piccoli.';
+  if(ch.keepTot < ch.lo){
+    return ch.bigOut
+      ? 'Tolte le banconote da 50 e 100 restano solo '+eur(ch.keepTot)+
+        ': servono tagli più piccoli per comporre il fondo.'
+      : 'Non c\'è abbastanza contante per lasciare il fondo minimo di '+eur(ch.lo)+'.';
+  }
+  return 'Con i tagli presenti il fondo più vicino è '+eur(ch.keepTot)+' — servono tagli più piccoli.';
 }
 
 function renderChiusura(){
