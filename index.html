@@ -171,10 +171,43 @@ textarea:focus{border-color:var(--ink);}
 .updbar button{border:none;background:#fff;color:var(--ink);font-size:.82rem;font-weight:800;padding:9px 16px;border-radius:8px;}
 
 .locked input,.locked textarea,.locked .dstep,.locked .add,.locked .x{pointer-events:none;opacity:.7;}
+
+/* ============ login ============ */
+#gate{position:fixed;inset:0;z-index:100;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
+.gcard{background:var(--card);border-radius:14px;padding:26px 22px;width:100%;max-width:380px;box-shadow:0 10px 40px -18px rgba(0,0,0,.4);}
+.gcard h2{font-size:1.05rem;font-weight:800;margin:0 0 3px;}
+.gcard p{font-size:.82rem;color:var(--faint);margin:0 0 18px;}
+.gfld{margin-bottom:11px;}
+.gfld label{display:block;font-size:.75rem;font-weight:700;color:var(--soft);margin-bottom:5px;}
+.gfld input{width:100%;height:46px;padding:0 12px;font-size:.95rem;border:1px solid var(--rule);border-radius:10px;background:var(--card);outline:none;}
+.gfld input:focus{border-color:var(--ink);}
+.gerr{font-size:.79rem;color:var(--red);font-weight:600;min-height:1.1em;margin:4px 0 10px;}
+#gBtn{width:100%;height:48px;border:none;border-radius:11px;background:var(--ink);color:#fff;font-size:.93rem;font-weight:800;}
+#gBtn:disabled{background:var(--rule);color:var(--faint);}
+
+/* ============ sync ============ */
+.sync{font-size:.68rem;font-weight:700;padding:4px 9px;border-radius:20px;white-space:nowrap;}
+.sync.on{background:var(--green-bg);color:var(--green);}
+.sync.off{background:var(--amber-bg);color:var(--amber);}
+.who{font-size:.7rem;color:var(--faint);white-space:nowrap;}
+.who button{border:none;background:none;color:var(--faint);text-decoration:underline;font-size:.7rem;}
 .hide{display:none !important;}
 </style>
 </head>
 <body>
+
+<div id="gate">
+  <div class="gcard">
+    <h2>Conta Cassa</h2>
+    <p>Accedi per vedere i check sincronizzati</p>
+    <div class="gfld"><label>Email</label>
+      <input type="email" id="gMail" autocomplete="username" inputmode="email"></div>
+    <div class="gfld"><label>Password</label>
+      <input type="password" id="gPass" autocomplete="current-password"></div>
+    <div class="gerr" id="gErr"></div>
+    <button id="gBtn">Accedi</button>
+  </div>
+</div>
 
 <header>
   <div class="hbar">
@@ -193,6 +226,8 @@ textarea:focus{border-color:var(--ink);}
       <span class="today" id="today">oggi</span>
     </div>
     <span id="lockB"></span>
+    <span class="sync off" id="syncB">connessione…</span>
+    <span class="who" id="whoB"></span>
   </div>
 </header>
 
@@ -317,7 +352,31 @@ textarea:focus{border-color:var(--ink);}
 </div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence }
+  from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+         doc, getDoc, setDoc, deleteDoc, collection, onSnapshot }
+  from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCJJx5661fkh3mRiLpGGnFMGoXmWcZ44k8",
+  authDomain: "check-conti-93877.firebaseapp.com",
+  projectId: "check-conti-93877",
+  storageBucket: "check-conti-93877.firebasestorage.app",
+  messagingSenderId: "290047624110",
+  appId: "1:290047624110:web:dde1e4642494fa4214be3f"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const fbAuth = getAuth(fbApp);
+/* cache locale persistente: l'app funziona anche senza rete
+   e sincronizza da sola appena la connessione torna */
+const fbDb = initializeFirestore(fbApp, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
+
 (function(){
 'use strict';
 var $ = function(id){ return document.getElementById(id); };
@@ -337,24 +396,25 @@ var qty={}, uscite=[], soglia=5, locked=false, hist=[];
 var lastFondo=null, refPranzo=null, targetOverride=null;
 var calc={}, chiusura={keep:{},take:{},keepTot:0,takeTot:0,inRange:true};
 
-/* ===================== storage ===================== */
-var store=(function(){
-  var has = typeof window.storage!=='undefined' && window.storage;
-  return {
-    get:async function(k){
-      if(has){ try{ var r=await window.storage.get(k,false); return r?r.value:null; }catch(e){ return null; } }
-      try{ return localStorage.getItem(k); }catch(e){ return null; }
-    },
-    set:async function(k,v){
-      if(has){ try{ return !!(await window.storage.set(k,v,false)); }catch(e){ return false; } }
-      try{ localStorage.setItem(k,v); return true; }catch(e){ return false; }
-    },
-    del:async function(k){
-      if(has){ try{ await window.storage.delete(k,false); }catch(e){} return; }
-      try{ localStorage.removeItem(k); }catch(e){}
-    }
-  };
-})();
+/* ===================== storage (Firestore) =====================
+   Stessa interfaccia chiave/valore di prima: cambia solo dove
+   finiscono i dati. La cache locale di Firestore garantisce che
+   il salvataggio funzioni anche con la rete assente.            */
+function docId(k){ return k.replace(/[:\/]/g,'_'); }
+var store={
+  get:async function(k){
+    try{ var d=await getDoc(doc(fbDb,'kv',docId(k))); return d.exists()? d.data().v : null; }
+    catch(e){ return null; }
+  },
+  set:async function(k,v){
+    try{ await setDoc(doc(fbDb,'kv',docId(k)),
+          {v:v, ts:Date.now(), by:(fbAuth.currentUser?fbAuth.currentUser.email:'')}); return true; }
+    catch(e){ return false; }
+  },
+  del:async function(k){
+    try{ await deleteDoc(doc(fbDb,'kv',docId(k))); }catch(e){}
+  }
+};
 
 /* ===================== utility ===================== */
 function today(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -830,13 +890,85 @@ $('wipe').onclick=async function(){
   hist=[]; lastFondo=null; renderHist(); load();
 };
 
+/* ===================== sincronizzazione live =====================
+   Quando l'altro dispositivo salva un check, questo si aggiorna
+   da solo: lo storico si ricarica sempre, la schermata aperta solo
+   se non la stai compilando in quel momento.                      */
+var liveOff=null;
+function startLive(){
+  if(liveOff) return;
+  liveOff = onSnapshot(collection(fbDb,'kv'), function(snap){
+    var mine = docId(key(cassa,date,turno));
+    var histChanged=false, viewChanged=false;
+    snap.docChanges().forEach(function(ch){
+      if(ch.doc.id==='hist') histChanged=true;
+      if(ch.doc.id===mine && ch.type!=='removed') viewChanged=true;
+    });
+    if(histChanged){
+      var d=snap.docs.filter(function(x){return x.id==='hist';})[0];
+      if(d){ try{ hist=JSON.parse(d.data().v)||[]; renderHist(); }catch(e){} }
+    }
+    if(viewChanged && locked) load();
+    setSync(!snap.metadata.fromCache);
+  }, function(){ setSync(false); });
+}
+function setSync(on){
+  var b=$('syncB');
+  b.className='sync '+(on?'on':'off');
+  b.textContent = on ? 'sincronizzato' : 'offline — salvo in locale';
+}
+
+/* ===================== login ===================== */
+function gateErr(msg){ $('gErr').textContent=msg; }
+async function doLogin(){
+  var mail=$('gMail').value.trim(), pass=$('gPass').value;
+  if(!mail || !pass){ gateErr('Inserisci email e password.'); return; }
+  $('gBtn').disabled=true; gateErr('');
+  try{
+    await setPersistence(fbAuth, browserLocalPersistence);
+    await signInWithEmailAndPassword(fbAuth, mail, pass);
+  }catch(e){
+    var c=(e && e.code)||'';
+    gateErr(
+      c.indexOf('invalid-credential')>=0 || c.indexOf('wrong-password')>=0 || c.indexOf('user-not-found')>=0
+        ? 'Email o password non corretti.'
+      : c.indexOf('too-many-requests')>=0 ? 'Troppi tentativi. Riprova tra qualche minuto.'
+      : c.indexOf('network')>=0 ? 'Nessuna connessione: per il primo accesso serve la rete.'
+      : 'Accesso non riuscito. Riprova.'
+    );
+  }
+  $('gBtn').disabled=false;
+}
+$('gBtn').onclick=doLogin;
+$('gPass').onkeydown=function(e){ if(e.key==='Enter') doLogin(); };
+$('gMail').onkeydown=function(e){ if(e.key==='Enter') $('gPass').focus(); };
+
 /* ===================== avvio ===================== */
-(async function(){
+var booted=false;
+onAuthStateChanged(fbAuth, async function(user){
+  if(!user){
+    $('gate').style.display='flex';
+    $('whoB').textContent='';
+    if(liveOff){ liveOff(); liveOff=null; }
+    booted=false;
+    return;
+  }
+  $('gate').style.display='none';
+  $('whoB').innerHTML = (user.email||'').split('@')[0]+' · <button id="out">esci</button>';
+  $('out').onclick=async function(){
+    if(!confirm('Uscire dall\'account su questo dispositivo?'))return;
+    if(liveOff){ liveOff(); liveOff=null; }
+    await signOut(fbAuth);
+  };
+  if(booted) return;
+  booted=true;
+
   var s=await store.get('soglia'); if(s){ soglia=num(s); $('fSoglia').value=soglia; }
   var h=await store.get('hist'); if(h){ try{ hist=JSON.parse(h); }catch(e){} }
   renderHist();
   await load();
-})();
+  startLive();
+});
 })();
 
 /* ===================== service worker ===================== */
