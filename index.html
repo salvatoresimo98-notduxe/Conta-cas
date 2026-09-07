@@ -37,6 +37,12 @@ header{background:var(--card);border-bottom:1px solid var(--rule);position:stick
 .seg{display:flex;background:var(--bg);border-radius:9px;padding:3px;gap:2px;}
 .seg button{border:none;background:none;font-size:.84rem;font-weight:700;color:var(--soft);padding:7px 13px;border-radius:7px;}
 .seg button.on{background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,.13);color:var(--ink);}
+.seg button{position:relative;}
+.seg button.done::after{
+  content:'✓';position:absolute;top:1px;right:4px;
+  font-size:.58rem;font-weight:800;color:var(--green);line-height:1;
+}
+.seg button.done{padding-right:17px;}
 .seg.cassa button.on[data-v=principale]{color:var(--wine);}
 .seg.cassa button.on[data-v=bar]{color:var(--green);}
 .dnav{display:flex;align-items:center;gap:4px;font-size:.84rem;color:var(--soft);}
@@ -338,8 +344,8 @@ textarea:focus{border-color:var(--ink);}
     <div class="card hide" id="cChiusura">
       <div class="chead"><h2>Chiusura di cassa</h2><span class="hint">calcolato in automatico</span></div>
       <div class="split2">
-        <div class="box"><div class="k">Da prelevare in tutto</div><div class="v" id="kTake">€ 0,00</div></div>
-        <div class="box"><div class="k">Resta nelle casse</div><div class="v" id="kKeep">€ 0,00</div></div>
+        <div class="box"><div class="k" id="kTakeL">Da prelevare</div><div class="v" id="kTake">€ 0,00</div></div>
+        <div class="box"><div class="k" id="kKeepL">Resta in cassa</div><div class="v" id="kKeep">€ 0,00</div></div>
       </div>
 
       <div class="tillhead" id="hP">Cassa principale</div>
@@ -686,14 +692,39 @@ function warnTxt(ch,C){
 }
 
 function renderChiusura(){
-  /* la chiusura serale si fa dalla principale e copre entrambe le casse */
-  if(!isFull()){ $('cChiusura').classList.add('hide'); return; }
+  if(turno!=='sera'){ $('cChiusura').classList.add('hide'); return; }
   $('cChiusura').classList.remove('hide');
 
+  /* dalla cassa bar: solo il proprio cassetto */
+  if(!isFull()){
+    chiusura  = computeChiusura(qty, CASSE.bar, targetOverride);
+    chiusuraB = {keep:{},take:{},keepTot:0,takeTot:0,inRange:true,empty:true};
+    $('kTakeL').textContent='Da prelevare';
+    $('kKeepL').textContent='Resta in cassa';
+    $('kTake').textContent=eur(chiusura.takeTot);
+    $('kKeep').textContent=eur(chiusura.keepTot);
+    $('kKeep').className='v '+(chiusura.empty?'':(chiusura.inRange?'ok':'bad'));
+    $('takeList').innerHTML=chips(chiusura.take,'take');
+    $('keepList').innerHTML=chips(chiusura.keep,'');
+    $('hP').textContent='Cassa bar — resta '+eur(chiusura.keepTot);
+    $('hP').className='tillhead bar';
+    var wb0=$('kWarn');
+    if(chiusura.empty || chiusura.inRange) wb0.classList.add('hide');
+    else { wb0.classList.remove('hide'); wb0.textContent=warnTxt(chiusura,CASSE.bar); }
+    $('barBlock').classList.add('hide');
+    if(document.activeElement!==$('fTarget'))
+      $('fTarget').value = targetOverride!==null ? targetOverride : '';
+    $('fTarget').placeholder='auto';
+    return;
+  }
+
+  $('hP').className='tillhead';
   chiusura  = computeChiusura(qty, CASSE.principale, targetOverride);
   chiusuraB = barCheck ? computeChiusura(barCheck.qty||{}, CASSE.bar, targetOverrideB)
                        : {keep:{},take:{},keepTot:0,takeTot:0,inRange:true,empty:true};
 
+  $('kTakeL').textContent = barCheck ? 'Da prelevare in tutto' : 'Da prelevare';
+  $('kKeepL').textContent = barCheck ? 'Resta nelle casse' : 'Resta in cassa';
   $('kTake').textContent=eur(r2(chiusura.takeTot+chiusuraB.takeTot));
   $('kKeep').textContent=eur(r2(chiusura.keepTot+chiusuraB.keepTot));
   $('kKeep').className='v '+((chiusura.empty&&chiusuraB.empty)?''
@@ -838,10 +869,29 @@ function buildSummary(){
     t.forEach(function(v){ L.push('  '+pad(dLab(v)+' × '+qty[v],17)+padL(eur(qty[v]*v),13)); });
   }
 
+  if(!calc.full && turno==='sera' && chiusura && !chiusura.empty){
+    L.push(''); L.push('CHIUSURA');
+    L.push(ln('Da prelevare', eur(chiusura.takeTot)));
+    ALL.filter(function(v){return chiusura.take[v]>0;}).forEach(function(v){
+      L.push('  '+pad(dLab(v)+' × '+chiusura.take[v],17)+padL(eur(chiusura.take[v]*v),13));
+    });
+    L.push('');
+    L.push('Resta in cassa '+eur(chiusura.keepTot));
+    ALL.filter(function(v){return chiusura.keep[v]>0;}).forEach(function(v){
+      L.push('  '+pad(dLab(v)+' × '+chiusura.keep[v],17)+padL(eur(chiusura.keep[v]*v),13));
+    });
+    if(!chiusura.inRange)
+      L.push('  ⚠ fuori dal range '+eur(CASSE.bar.min)+' – '+eur(CASSE.bar.max));
+  }
+
   if(calc.full && turno==='sera'){
     L.push(''); L.push('CHIUSURA');
     L.push(ln('Prelevato in tutto', eur(r2(chiusura.takeTot+chiusuraB.takeTot))));
     L.push('');
+    L.push('Cassa principale — preleva');
+    ALL.filter(function(v){return chiusura.take[v]>0;}).forEach(function(v){
+      L.push('  '+pad(dLab(v)+' × '+chiusura.take[v],17)+padL(eur(chiusura.take[v]*v),13));
+    });
     L.push('Cassa principale — resta '+eur(chiusura.keepTot));
     ALL.filter(function(v){return chiusura.keep[v]>0;}).forEach(function(v){
       L.push('  '+pad(dLab(v)+' × '+chiusura.keep[v],17)+padL(eur(chiusura.keep[v]*v),13));
@@ -850,6 +900,10 @@ function buildSummary(){
       L.push('  ⚠ fuori dal range '+eur(CASSE.principale.min)+' – '+eur(CASSE.principale.max));
     if(barCheck){
       L.push('');
+      L.push('Cassa bar — preleva');
+      ALL.filter(function(v){return chiusuraB.take[v]>0;}).forEach(function(v){
+        L.push('  '+pad(dLab(v)+' × '+chiusuraB.take[v],17)+padL(eur(chiusuraB.take[v]*v),13));
+      });
       L.push('Cassa bar — resta '+eur(chiusuraB.keepTot));
       ALL.filter(function(v){return chiusuraB.keep[v]>0;}).forEach(function(v){
         L.push('  '+pad(dLab(v)+' × '+chiusuraB.keep[v],17)+padL(eur(chiusuraB.keep[v]*v),13));
@@ -955,7 +1009,7 @@ async function load(){
   $('dLbl').textContent=fmtD(date);
   $('cIncassi').classList.toggle('hide',!full);
   $('cUscite').classList.toggle('hide',!full);
-  $('cChiusura').classList.toggle('hide', !(full && turno==='sera'));
+  $('cChiusura').classList.toggle('hide', turno!=='sera');
   $('incTitle').textContent = turno==='pranzo'?'Incassi del pranzo':'Incassi dell\'intera giornata';
   $('corrHint').textContent = turno==='pranzo'?'lettura non fiscale a fine pranzo':'totale giornata dalla chiusura RT';
   $('fondoHint').textContent = 'range '+eur(CASSE.principale.min)+' – '+eur(CASSE.principale.max);
@@ -980,7 +1034,7 @@ async function load(){
     }catch(err){ setLocked(false); }
   } else { setLocked(false); applyPrefill(); }
 
-  buildGrid(); renderPrefill(); renderUscite(); renderPromemoria(); recalc();
+  buildGrid(); renderPrefill(); renderUscite(); renderPromemoria(); renderDone(); recalc();
   if(locked) showShare(); else hideShare();
 }
 
@@ -989,6 +1043,10 @@ $('save').onclick=async function(){
   if(locked)return;
   var me = fbAuth.currentUser ? (fbAuth.currentUser.email||'') : '';
   var p={ qty:qty, contato:calc.contatoP, nota:$('fNota').value.trim(), by:me, ts:Date.now() };
+  if(!calc.full && turno==='sera'){
+    p.keep=chiusura.keep; p.keepTot=chiusura.keepTot;
+    p.takeTot=chiusura.takeTot; p.target=targetOverride;
+  }
 
   if(calc.full){
     p.uscite=uscite; p.fondoP=calc.fondoP; p.fondoB=calc.fondoB;
@@ -1012,6 +1070,13 @@ $('save').onclick=async function(){
   if(hist.length>150) hist=hist.slice(0,150);
   await store.set('hist',JSON.stringify(hist));
 
+  /* chiusura serale della sola cassa bar */
+  if(!calc.full && turno==='sera' && chiusura.keepTot>0){
+    var kb0={}; ALL.forEach(function(v){ if(chiusura.keep[v]>0) kb0[v]=chiusura.keep[v]; });
+    lastFondo={qty:kb0,total:chiusura.keepTot,date:date};
+    await store.set('fondo:bar',JSON.stringify(lastFondo));
+  }
+
   /* la chiusura serale della principale fissa il fondo di entrambe le casse */
   if(calc.full && turno==='sera'){
     if(chiusura.keepTot>0 && (!lastFondo || date>=lastFondo.date)){
@@ -1026,9 +1091,27 @@ $('save').onclick=async function(){
     }
   }
 
-  setLocked(true); renderPrefill();
+  setLocked(true); renderPrefill(); renderDone();
   $('msg').textContent='Check salvato.'; showShare(); renderHist();
 };
+
+/* ============ segnala i check già registrati oggi ============ */
+function isDone(c,t){
+  for(var i=0;i<hist.length;i++){
+    if(hist[i].c===c && hist[i].d===date && hist[i].t===t) return true;
+  }
+  return false;
+}
+function renderDone(){
+  /* i pulsanti cassa mostrano lo stato del turno selezionato,
+     i pulsanti turno quello della cassa selezionata */
+  Array.prototype.forEach.call(document.querySelectorAll('#segC button'), function(b){
+    b.classList.toggle('done', isDone(b.dataset.v, turno));
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#segT button'), function(b){
+    b.classList.toggle('done', isDone(cassa, b.dataset.v));
+  });
+}
 
 /* ===================== storico ===================== */
 function renderHist(){
@@ -1092,7 +1175,7 @@ function startLive(){
     });
     if(histChanged){
       var d=snap.docs.filter(function(x){return x.id==='hist';})[0];
-      if(d){ try{ hist=JSON.parse(d.data().v)||[]; renderHist(); }catch(e){} }
+      if(d){ try{ hist=JSON.parse(d.data().v)||[]; renderHist(); renderDone(); }catch(e){} }
     }
     if(viewChanged && locked) load();
     setSync(!snap.metadata.fromCache);
@@ -1157,6 +1240,7 @@ onAuthStateChanged(fbAuth, async function(user){
   var h=await store.get('hist'); if(h){ try{ hist=JSON.parse(h); }catch(e){} }
   renderHist();
   await load();
+  renderDone();
   startLive();
 });
 })();
