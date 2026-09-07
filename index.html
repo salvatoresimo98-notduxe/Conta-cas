@@ -172,6 +172,19 @@ textarea:focus{border-color:var(--ink);}
 
 .locked input,.locked textarea,.locked .dstep,.locked .add,.locked .x{pointer-events:none;opacity:.7;}
 
+/* ============ banner conteggio ripreso ============ */
+.prefill{
+  display:flex;align-items:center;gap:8px;
+  background:var(--amber-bg);border-radius:9px;
+  padding:8px 11px;margin-bottom:11px;
+  font-size:.76rem;font-weight:600;color:var(--amber);
+}
+.prefill span{flex:1;}
+.prefill button{
+  border:none;background:none;color:var(--amber);
+  text-decoration:underline;font-size:.74rem;font-weight:700;flex-shrink:0;
+}
+
 /* ============ intestazione cassa nella chiusura ============ */
 .tillhead{font-size:.78rem;font-weight:800;color:var(--wine);margin:14px 0 2px;
   padding-top:12px;border-top:1px solid var(--rule);}
@@ -248,6 +261,10 @@ textarea:focus{border-color:var(--ink);}
         <h2>Conteggio contante</h2>
         <span class="hint">inserisci solo le quantità</span>
         <span class="live" id="live">€ 0,00</span>
+      </div>
+      <div class="prefill hide" id="prefillBar">
+        <span id="prefillTxt"></span>
+        <button id="prefillClear">azzera</button>
       </div>
       <div id="grid"></div>
       <div class="tot"><span>Totale in cassa</span><span class="v" id="gTot">€ 0,00</span></div>
@@ -433,7 +450,7 @@ var cassa='principale', turno='pranzo', date=today();
 var qty={}, uscite=[], soglia=5, locked=false, hist=[];
 var lastFondo=null, lastFondoBar=null, refPranzo=null;
 var targetOverride=null, targetOverrideB=null;
-var barCheck=null, savedBy='';
+var barCheck=null, savedBy='', prefillLabel='';
 var calc={}, chiusura={keep:{},take:{},keepTot:0,takeTot:0,inRange:true};
 
 /* ===================== storage (Firestore) =====================
@@ -497,6 +514,34 @@ function computeChiusura(q, C, override){
           inRange:(keepTot>=lo-0.005 && keepTot<=hi+0.005), lo:lo, hi:hi,
           empty:sumQty(q)===0};
 }
+
+/* ============ conteggio ripreso dall'ultimo registrato ============
+   La sera la cassa contiene già il contante del pranzo: si riparte
+   da quei tagli e si aggiungono solo le differenze.               */
+function applyPrefill(){
+  prefillLabel='';
+  var src=null;
+  if(turno==='sera' && refPranzo && refPranzo.qty){
+    src=refPranzo.qty;
+    prefillLabel='Ripreso dal conteggio del pranzo';
+  } else if(turno==='pranzo' && lastFondo && lastFondo.qty){
+    src=lastFondo.qty;
+    prefillLabel='Ripreso dal fondo lasciato il '+fmtD(lastFondo.date);
+  }
+  if(!src){ return; }
+  ALL.forEach(function(v){ if(src[v]>0) qty[v]=src[v]; });
+}
+function renderPrefill(){
+  var b=$('prefillBar');
+  if(!prefillLabel || locked){ b.classList.add('hide'); return; }
+  b.classList.remove('hide');
+  $('prefillTxt').textContent = prefillLabel+' — verifica e correggi';
+}
+$('prefillClear').onclick=function(){
+  if(locked)return;
+  qty={}; prefillLabel='';
+  buildGrid(); renderPrefill(); recalc();
+};
 
 /* ===================== griglia conteggio ===================== */
 function buildGrid(){
@@ -869,14 +914,15 @@ function setLocked(v){
 }
 $('unlock').onclick=function(){
   if(!confirm('Sbloccare il check per correggerlo? Al salvataggio sostituirà quello registrato.'))return;
-  setLocked(false); recalc(); hideShare(); $('msg').textContent='Check sbloccato — ricordati di risalvare.';
+  setLocked(false); renderPrefill(); recalc(); hideShare();
+  $('msg').textContent='Check sbloccato — ricordati di risalvare.';
 };
 
 /* ===================== caricamento ===================== */
 async function load(){
   var C=CASSE[cassa], full=C.full;
   $('msg').textContent='';
-  qty={}; uscite=[]; targetOverride=null; targetOverrideB=null; savedBy='';
+  qty={}; uscite=[]; targetOverride=null; targetOverrideB=null; savedBy=''; prefillLabel='';
   $('fNota').value=''; $('fCorr').value=''; $('fPos').value=''; $('fAltri').value='';
 
   /* ultimo fondo lasciato in ciascuna cassa */
@@ -932,9 +978,9 @@ async function load(){
       if(e.targetB!==undefined && e.targetB!==null) targetOverrideB=e.targetB;
       setLocked(true);
     }catch(err){ setLocked(false); }
-  } else { setLocked(false); }
+  } else { setLocked(false); applyPrefill(); }
 
-  buildGrid(); renderUscite(); renderPromemoria(); recalc();
+  buildGrid(); renderPrefill(); renderUscite(); renderPromemoria(); recalc();
   if(locked) showShare(); else hideShare();
 }
 
@@ -980,7 +1026,8 @@ $('save').onclick=async function(){
     }
   }
 
-  setLocked(true); $('msg').textContent='Check salvato.'; showShare(); renderHist();
+  setLocked(true); renderPrefill();
+  $('msg').textContent='Check salvato.'; showShare(); renderHist();
 };
 
 /* ===================== storico ===================== */
