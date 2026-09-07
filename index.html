@@ -897,7 +897,10 @@ $('wipe').onclick=async function(){
 var liveOff=null;
 function startLive(){
   if(liveOff) return;
-  liveOff = onSnapshot(collection(fbDb,'kv'), function(snap){
+  /* includeMetadataChanges: senza questo il listener non viene
+     richiamato quando cambia solo lo stato della connessione,
+     e l'indicatore resterebbe bloccato su "offline". */
+  liveOff = onSnapshot(collection(fbDb,'kv'), {includeMetadataChanges:true}, function(snap){
     var mine = docId(key(cassa,date,turno));
     var histChanged=false, viewChanged=false;
     snap.docChanges().forEach(function(ch){
@@ -910,12 +913,16 @@ function startLive(){
     }
     if(viewChanged && locked) load();
     setSync(!snap.metadata.fromCache);
-  }, function(){ setSync(false); });
+  }, function(err){
+    var c=(err && err.code)||'';
+    if(c.indexOf('permission-denied')>=0) setSync(false,'accesso negato — controlla le regole');
+    else setSync(false);
+  });
 }
-function setSync(on){
+function setSync(on,msg){
   var b=$('syncB');
   b.className='sync '+(on?'on':'off');
-  b.textContent = on ? 'sincronizzato' : 'offline — salvo in locale';
+  b.textContent = msg ? msg : (on ? 'sincronizzato' : 'offline — salvo in locale');
 }
 
 /* ===================== login ===================== */
