@@ -1213,8 +1213,23 @@ async function load(){
   $('corrHint').textContent = turno==='pranzo'?'lettura non fiscale a fine pranzo':'totale giornata dalla chiusura RT';
   $('fondoHint').textContent = 'range '+eur(CASSE.principale.min)+' – '+eur(CASSE.principale.max);
   $('fondoBarHint').textContent = 'range '+eur(CASSE.bar.min)+' – '+eur(CASSE.bar.max);
-  $('fFondo').value    = (lastFondo && lastFondo.total) ? lastFondo.total : CASSE.principale.max;
-  $('fFondoBar').value = (lastFondoBar && lastFondoBar.total) ? lastFondoBar.total : CASSE.bar.max;
+  $('fFondo').value = (lastFondo && lastFondo.total) ? lastFondo.total : CASSE.principale.max;
+
+  /* Il fondo bar per la giornata è quello di QUESTA mattina, fissato
+     nel check pranzo della principale — non l'ultimo salvato in
+     assoluto, che nel frattempo può essere avanzato per via della
+     chiusura serale del solo bar (obbligatoria prima di questa).
+     Senza questa distinzione, l'incasso di pranzo del bar finirebbe
+     contato due volte: come fondo E dentro i corrispettivi del giorno. */
+  var fondoBarOggi = null;
+  if(full && turno==='sera'){
+    var rpFondo=await store.get(key('principale',date,'pranzo'));
+    if(rpFondo){ try{ var rf=JSON.parse(rpFondo);
+      if(rf.fondoB!==undefined && rf.fondoB!==null) fondoBarOggi=rf.fondoB;
+    }catch(e){} }
+  }
+  $('fFondoBar').value = (fondoBarOggi!==null) ? fondoBarOggi
+    : (lastFondoBar && lastFondoBar.total) ? lastFondoBar.total : CASSE.bar.max;
 
   var raw=await store.get(key(cassa,date,turno));
   if(raw){
@@ -1272,7 +1287,7 @@ $('save').onclick=async function(){
   await store.set('hist',JSON.stringify(hist));
 
   /* chiusura serale della sola cassa bar */
-  if(!calc.full && turno==='sera' && chiusura.keepTot>0){
+  if(!calc.full && turno==='sera' && chiusura.keepTot>0 && (!lastFondo || date>=lastFondo.date)){
     var kb0={}; ALL.forEach(function(v){ if(chiusura.keep[v]>0) kb0[v]=chiusura.keep[v]; });
     lastFondo={qty:kb0,total:chiusura.keepTot,date:date};
     await store.set('fondo:bar',JSON.stringify(lastFondo));
