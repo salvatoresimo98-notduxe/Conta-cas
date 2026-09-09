@@ -1360,7 +1360,7 @@ Array.prototype.forEach.call(document.querySelectorAll('#segT button'),
 $('prev').onclick=function(){ date=shift(date,-1); load(); };
 $('next').onclick=function(){ date=shift(date,1); load(); };
 $('today').onclick=function(){ date=today(); load(); };
-['fCorr','fPos','fAltri','fFondo'].forEach(function(i){ $(i).oninput=recalc; });
+['fCorr','fPos','fAltri','fFondo','fFondoBar'].forEach(function(i){ $(i).oninput=recalc; });
 $('fNota').oninput=recalc;
 $('fSoglia').oninput=async function(e){
   soglia=num(e.target.value)||0; await store.set('soglia',String(soglia)); recalc();
