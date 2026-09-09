@@ -1,6 +1,6 @@
 {
-  "name": "Conta Cassa",
-  "short_name": "Cassa",
+  "name": "Quadra",
+  "short_name": "Quadra",
   "description": "Conteggio e verifica cassa per servizio pranzo e serale",
   "start_url": "./",
   "scope": "./",

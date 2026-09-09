@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conta Cassa</title>
+<title>Quadra</title>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#1f1d18">
-<meta name="description" content="Conteggio e verifica cassa per servizio pranzo e serale">
+<meta name="description" content="Quadra — conteggio e verifica cassa per servizio pranzo e serale">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Conta Cassa">
+<meta name="apple-mobile-web-app-title" content="Quadra">
 <link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -302,7 +302,7 @@ textarea:focus{border-color:var(--ink);}
 
 <div id="gate">
   <div class="gcard">
-    <h2>Conta Cassa</h2>
+    <h2>Quadra</h2>
     <p>Accedi per vedere i check sincronizzati</p>
     <div class="gfld"><label>Email</label>
       <input type="email" id="gMail" autocomplete="username" inputmode="email"></div>
@@ -315,7 +315,7 @@ textarea:focus{border-color:var(--ink);}
 
 <header>
   <div class="hbar">
-    <h1 class="brand">Conta Cassa</h1>
+    <h1 class="brand">Quadra</h1>
     <div class="grow"></div>
     <div class="seg cassa" id="segC">
       <button data-v="principale" class="on">Principale</button>
@@ -1517,7 +1517,7 @@ var GUIDE=[
     'Sul POS entra in <b>sezione vendite</b> e leggi il totale.</p>'+
     '<p><b>3. Altri elettronici — dall\'app Satispay</b><br>'+
     'Apri l\'app e leggi l\'incassato della giornata. Qui vanno anche buoni pasto e bonifici, se ce ne sono stati.</p>'+
-    '<div class="tip">Sia sul POS sia su Satispay <b>controlla le date delle transazioni</b>: se la sera prima non è stata chiusa correttamente, il totale può comprendere anche le operazioni di ieri. In quel caso conta solo quelle di oggi, altrimenti risulterà un ammanco che non esiste.</div>'},
+    '<div class="tip">Sia sul POS sia su Satispay <b>controlla gli orari delle transazioni tra mezzanotte e le due</b>. Quando il servizio finisce dopo la mezzanotte, quei pagamenti vengono registrati con la data del giorno dopo pur appartenendo alla serata precedente: vanno esclusi dal totale di oggi e conteggiati nella serata a cui appartengono, altrimenti risulta un\'eccedenza oggi e un ammanco ieri.</div>'},
 
  {t:'Inserire gli incassi',
   h:'<p>Il bar si limita al conteggio: gli incassi si inseriscono <b>solo nella Principale</b> e valgono per tutta l\'attività, bar compreso.</p>'+
