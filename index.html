@@ -178,6 +178,20 @@ textarea:focus{border-color:var(--ink);}
 
 .locked input,.locked textarea,.locked .dstep,.locked .add,.locked .x{pointer-events:none;opacity:.7;}
 
+/* ============ storico ============ */
+.histh{display:flex;align-items:center;gap:10px;margin:0 2px 8px;}
+.histh h2{margin:0;}
+.allb{margin-left:auto;border:1px solid var(--rule);background:var(--card);
+  color:var(--soft);font-size:.76rem;font-weight:700;padding:7px 12px;border-radius:8px;}
+.allb:hover{border-color:var(--ink);color:var(--ink);}
+#archive{position:fixed;inset:0;z-index:90;background:rgba(31,29,24,.5);
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.arcfilt{display:flex;gap:8px;padding:12px 18px;border-bottom:1px solid var(--rule);flex-wrap:wrap;}
+.arcfilt .seg button{padding:6px 11px;font-size:.78rem;}
+#arcBody .hrow{margin-bottom:6px;}
+.arcday{font-size:.7rem;font-weight:800;color:var(--faint);margin:12px 0 6px;}
+.arcday:first-child{margin-top:0;}
+
 /* ============ guida ============ */
 .helpb{width:26px;height:26px;border-radius:50%;border:1px solid var(--rule);
   background:var(--card);color:var(--soft);font-size:.82rem;font-weight:800;
@@ -281,6 +295,31 @@ textarea:focus{border-color:var(--ink);}
 </style>
 </head>
 <body>
+
+<div id="archive" class="hide">
+  <div class="gbox">
+    <div class="ghead">
+      <div>
+        <div class="gtitle">Storico completo</div>
+        <div class="gstep" id="arcCount"></div>
+      </div>
+      <button class="gclose" id="arcClose" aria-label="Chiudi">×</button>
+    </div>
+    <div class="arcfilt">
+      <div class="seg" id="arcC">
+        <button data-v="" class="on">Tutte</button>
+        <button data-v="principale">Principale</button>
+        <button data-v="bar">Bar</button>
+      </div>
+      <div class="seg" id="arcT">
+        <button data-v="" class="on">Tutti</button>
+        <button data-v="pranzo">Pranzo</button>
+        <button data-v="sera">Sera</button>
+      </div>
+    </div>
+    <div class="gbody" id="arcBody"></div>
+  </div>
+</div>
 
 <div id="guide" class="hide">
   <div class="gbox">
@@ -484,7 +523,10 @@ textarea:focus{border-color:var(--ink);}
 </div>
 
 <div class="hist">
-  <h2>Storico</h2>
+  <div class="histh">
+    <h2>Ultimi check</h2>
+    <button class="allb" id="allBtn">Storico completo</button>
+  </div>
   <div id="histList"><div class="hempty">Caricamento…</div></div>
 </div>
 
@@ -1384,27 +1426,83 @@ function renderDone(){
 }
 
 /* ===================== storico ===================== */
+/* costruisce una riga dello storico, riutilizzata nelle due viste */
+function histRow(h, onPick, grouped){
+  var b=document.createElement('button'); b.className='hrow';
+  var d=document.createElement('span'); d.className='hdot '+h.c;
+  var t=document.createElement('span'); t.className='htxt';
+  var who = h.by ? String(h.by).split('@')[0] : '';
+  var turnoLbl = (h.t==='pranzo'?'Pranzo':'Sera');
+  /* nell'archivio la data è già nell'intestazione del giorno */
+  t.innerHTML = grouped
+    ? CASSE[h.c].nome+' · '+turnoLbl + (who?'<small>'+who+'</small>':'')
+    : fmtD(h.d)+'<small>'+CASSE[h.c].nome+' · '+turnoLbl+(who?' · '+who:'')+'</small>';
+  var a=document.createElement('span');
+  if(h.diff===null||h.diff===undefined){ a.className='hamt na'; a.textContent=eur(h.contato||0); }
+  else {
+    var ok=Math.abs(h.diff)<0.005;
+    a.className='hamt '+(ok?'ok':'bad'); a.textContent=ok?'✓':sgn(h.diff);
+  }
+  b.appendChild(d); b.appendChild(t); b.appendChild(a);
+  b.onclick=function(){
+    cassa=h.c; date=h.d; turno=h.t;
+    if(onPick) onPick();
+    load(); window.scrollTo({top:0,behavior:'smooth'});
+  };
+  return b;
+}
+
 function renderHist(){
   var l=$('histList');
+  $('allBtn').classList.toggle('hide', hist.length<=4);
   if(!hist.length){ l.innerHTML='<div class="hempty">Nessun check registrato.</div>'; return; }
   l.innerHTML='';
-  hist.slice(0,20).forEach(function(h){
-    var b=document.createElement('button'); b.className='hrow';
-    var d=document.createElement('span'); d.className='hdot '+h.c;
-    var t=document.createElement('span'); t.className='htxt';
-    var who = h.by ? ' · '+String(h.by).split('@')[0] : '';
-    t.innerHTML=fmtD(h.d)+'<small>'+CASSE[h.c].nome+' · '+(h.t==='pranzo'?'Pranzo':'Sera')+who+'</small>';
-    var a=document.createElement('span');
-    if(h.diff===null||h.diff===undefined){ a.className='hamt na'; a.textContent=eur(h.contato||0); }
-    else {
-      var ok=Math.abs(h.diff)<0.005;
-      a.className='hamt '+(ok?'ok':'bad'); a.textContent=ok?'✓':sgn(h.diff);
+  hist.slice(0,4).forEach(function(h){ l.appendChild(histRow(h)); });
+}
+
+/* ============ storico completo ============ */
+var arcC='', arcT='';
+function renderArchive(){
+  var body=$('arcBody');
+  var list=hist.filter(function(h){
+    return (!arcC || h.c===arcC) && (!arcT || h.t===arcT);
+  });
+  $('arcCount').textContent = list.length===0 ? 'nessun check'
+    : list.length+(list.length===1?' check registrato':' check registrati');
+  body.innerHTML='';
+  if(!list.length){
+    body.innerHTML='<div class="hempty">Nessun check con questi filtri.</div>';
+    return;
+  }
+  var lastDay=null;
+  list.forEach(function(h){
+    if(h.d!==lastDay){
+      lastDay=h.d;
+      var lab=document.createElement('div'); lab.className='arcday';
+      lab.textContent=fmtD(h.d); body.appendChild(lab);
     }
-    b.appendChild(d); b.appendChild(t); b.appendChild(a);
-    b.onclick=function(){ cassa=h.c; date=h.d; turno=h.t; load(); window.scrollTo({top:0,behavior:'smooth'}); };
-    l.appendChild(b);
+    body.appendChild(histRow(h, function(){ $('archive').classList.add('hide'); }, true));
   });
 }
+$('allBtn').onclick=function(){ renderArchive(); $('archive').classList.remove('hide'); };
+$('arcClose').onclick=function(){ $('archive').classList.add('hide'); };
+$('archive').onclick=function(e){ if(e.target===$('archive')) $('archive').classList.add('hide'); };
+Array.prototype.forEach.call(document.querySelectorAll('#arcC button'), function(b){
+  b.onclick=function(){
+    arcC=b.dataset.v;
+    Array.prototype.forEach.call(document.querySelectorAll('#arcC button'),
+      function(x){ x.classList.toggle('on', x===b); });
+    renderArchive();
+  };
+});
+Array.prototype.forEach.call(document.querySelectorAll('#arcT button'), function(b){
+  b.onclick=function(){
+    arcT=b.dataset.v;
+    Array.prototype.forEach.call(document.querySelectorAll('#arcT button'),
+      function(x){ x.classList.toggle('on', x===b); });
+    renderArchive();
+  };
+});
 
 /* ===================== eventi ===================== */
 Array.prototype.forEach.call(document.querySelectorAll('#segC button'),
@@ -1583,6 +1681,9 @@ $('gPrev').onclick=function(){ if(gI>0){ gI--; gRender(); } };
 $('gNext').onclick=function(){ if(gI<GUIDE.length-1){ gI++; gRender(); } else gClose(); };
 $('guide').onclick=function(e){ if(e.target===$('guide')) gClose(); };
 document.addEventListener('keydown',function(e){
+  if(e.key==='Escape' && !$('archive').classList.contains('hide')){
+    $('archive').classList.add('hide'); return;
+  }
   if($('guide').classList.contains('hide')) return;
   if(e.key==='Escape') gClose();
   if(e.key==='ArrowRight') $('gNext').click();
