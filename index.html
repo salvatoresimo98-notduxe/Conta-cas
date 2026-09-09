@@ -178,6 +178,41 @@ textarea:focus{border-color:var(--ink);}
 
 .locked input,.locked textarea,.locked .dstep,.locked .add,.locked .x{pointer-events:none;opacity:.7;}
 
+/* ============ guida ============ */
+.helpb{width:26px;height:26px;border-radius:50%;border:1px solid var(--rule);
+  background:var(--card);color:var(--soft);font-size:.82rem;font-weight:800;
+  line-height:1;padding:0;flex-shrink:0;}
+.helpb:hover{border-color:var(--ink);color:var(--ink);}
+#guide{position:fixed;inset:0;z-index:90;background:rgba(31,29,24,.5);
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.gbox{background:var(--card);border-radius:14px;width:100%;max-width:560px;
+  max-height:88vh;display:flex;flex-direction:column;
+  box-shadow:0 20px 60px -20px rgba(0,0,0,.5);}
+.ghead{display:flex;align-items:flex-start;gap:10px;padding:18px 18px 12px;
+  border-bottom:1px solid var(--rule);}
+.gtitle{font-size:1.02rem;font-weight:800;line-height:1.25;}
+.gstep{font-size:.71rem;color:var(--faint);font-weight:600;margin-top:2px;}
+.gclose{margin-left:auto;border:none;background:none;color:var(--faint);
+  font-size:1.5rem;line-height:1;padding:0 2px;flex-shrink:0;}
+.gbody{padding:16px 18px;overflow-y:auto;font-size:.88rem;line-height:1.55;color:var(--ink);}
+.gbody p{margin:0 0 10px;}
+.gbody ol,.gbody ul{margin:0 0 10px;padding-left:20px;}
+.gbody li{margin-bottom:6px;}
+.gbody b{font-weight:800;}
+.gbody .tip{background:var(--amber-bg);border-radius:9px;padding:10px 12px;
+  font-size:.82rem;color:var(--amber);font-weight:600;margin:10px 0 0;}
+.gbody .good{background:var(--green-bg);border-radius:9px;padding:10px 12px;
+  font-size:.82rem;color:var(--green);font-weight:600;margin:10px 0 0;}
+.gfoot{display:flex;align-items:center;gap:10px;padding:12px 18px 16px;
+  border-top:1px solid var(--rule);}
+.gnav{border:1px solid var(--rule);background:var(--card);color:var(--soft);
+  font-size:.83rem;font-weight:700;padding:10px 14px;border-radius:9px;}
+.gnav.p{background:var(--ink);color:#fff;border-color:var(--ink);margin-left:auto;}
+.gnav:disabled{opacity:.35;}
+.gdots{display:flex;gap:5px;flex:1;justify-content:center;}
+.gdots i{width:6px;height:6px;border-radius:50%;background:var(--rule);display:block;}
+.gdots i.on{background:var(--ink);}
+
 /* ============ integrazione fondo ============ */
 .integ{background:var(--bg);border-radius:10px;padding:11px;margin-top:10px;}
 .integ .ih{font-size:.75rem;font-weight:700;color:var(--soft);margin-bottom:8px;}
@@ -247,6 +282,24 @@ textarea:focus{border-color:var(--ink);}
 </head>
 <body>
 
+<div id="guide" class="hide">
+  <div class="gbox">
+    <div class="ghead">
+      <div>
+        <div class="gtitle" id="gTitle"></div>
+        <div class="gstep" id="gStep"></div>
+      </div>
+      <button class="gclose" id="gClose" aria-label="Chiudi">×</button>
+    </div>
+    <div class="gbody" id="gBody"></div>
+    <div class="gfoot">
+      <button class="gnav" id="gPrev">‹ Indietro</button>
+      <div class="gdots" id="gDots"></div>
+      <button class="gnav p" id="gNext">Avanti ›</button>
+    </div>
+  </div>
+</div>
+
 <div id="gate">
   <div class="gcard">
     <h2>Conta Cassa</h2>
@@ -276,6 +329,7 @@ textarea:focus{border-color:var(--ink);}
       <button id="prev">‹</button><span id="dLbl">—</span><button id="next">›</button>
       <span class="today" id="today">oggi</span>
     </div>
+    <button class="helpb" id="helpBtn" aria-label="Guida">?</button>
     <span id="lockB"></span>
     <span class="sync off" id="syncB">connessione…</span>
     <span class="who" id="whoB"></span>
@@ -317,11 +371,11 @@ textarea:focus{border-color:var(--ink);}
         <span class="cur">€</span><input type="number" id="fCorr" step="0.01" inputmode="decimal" placeholder="0,00">
       </div>
       <div class="fld">
-        <label>POS / carte</label>
+        <label>POS / carte <small>dal terminale POS, sezione vendite</small></label>
         <span class="cur">€</span><input type="number" id="fPos" step="0.01" inputmode="decimal" placeholder="0,00">
       </div>
       <div class="fld">
-        <label>Altri elettronici <small>Satispay, buoni pasto, bonifici</small></label>
+        <label>Altri elettronici <small>app Satispay, buoni pasto, bonifici</small></label>
         <span class="cur">€</span><input type="number" id="fAltri" step="0.01" inputmode="decimal" placeholder="0,00">
       </div>
       <div class="fld">
@@ -1210,7 +1264,7 @@ async function load(){
   $('cUscite').classList.toggle('hide',!full);
   $('cChiusura').classList.toggle('hide', turno!=='sera');
   $('incTitle').textContent = turno==='pranzo'?'Incassi del pranzo':'Incassi dell\'intera giornata';
-  $('corrHint').textContent = turno==='pranzo'?'lettura non fiscale a fine pranzo':'totale giornata dalla chiusura RT';
+  $('corrHint').textContent = 'Passepartout → Chiusura giornaliera → Totale incassato';
   $('fondoHint').textContent = 'range '+eur(CASSE.principale.min)+' – '+eur(CASSE.principale.max);
   $('fondoBarHint').textContent = 'range '+eur(CASSE.bar.min)+' – '+eur(CASSE.bar.max);
   $('fFondo').value = (lastFondo && lastFondo.total) ? lastFondo.total : CASSE.principale.max;
@@ -1431,6 +1485,109 @@ async function doLogin(){
 $('gBtn').onclick=doLogin;
 $('gPass').onkeydown=function(e){ if(e.key==='Enter') doLogin(); };
 $('gMail').onkeydown=function(e){ if(e.key==='Enter') $('gPass').focus(); };
+
+
+/* ===================== guida ===================== */
+var GUIDE=[
+ {t:'A cosa serve questa app',
+  h:'<p>Serve a <b>contare la cassa e verificare che i conti tornino</b>, due volte al giorno: a fine pranzo e a fine serata.</p>'+
+    '<p>Le casse sono due — <b>Principale</b> e <b>Bar</b> — ma la contabilità è una sola: i corrispettivi del registratore comprendono anche le vendite del bar. Il contante è solo diviso in due cassetti.</p>'+
+    '<p>Per questo l\'app somma il contante delle due casse e lo confronta con quanto dovrebbe esserci in base alle vendite.</p>'+
+    '<div class="good">Tutto viene salvato online: quello che registra una persona lo vede subito anche l\'altra, su qualsiasi dispositivo.</div>'},
+
+ {t:'L\'ordine da rispettare',
+  h:'<p>C\'è una sola regola di sequenza, ma è importante:</p>'+
+    '<ol><li><b>Prima il Bar</b> — conta il cassetto e salva.</li>'+
+    '<li><b>Poi la Principale</b> — conta il cassetto e inserisci gli incassi.</li></ol>'+
+    '<p>La Principale ha bisogno del conteggio del bar per fare la quadratura. Se il bar non è stato ancora salvato, al posto del risultato compare <b>"Manca il conteggio del bar"</b> e il salvataggio resta bloccato.</p>'+
+    '<div class="tip">Questa sequenza vale sia a pranzo sia la sera.</div>'},
+
+ {t:'Contare il contante',
+  h:'<p>Nel riquadro <b>Conteggio contante</b> inserisci solo <b>quante banconote e monete</b> ci sono per ogni taglio. Gli importi li calcola l\'app.</p>'+
+    '<ul><li>Scrivi il numero nella casella, oppure usa i pulsanti <b>−</b> e <b>+</b>.</li>'+
+    '<li>In alto a destra vedi il totale aggiornarsi mentre conti.</li></ul>'+
+    '<p>Spesso la griglia è <b>già compilata</b> con l\'ultimo conteggio: la sera riprende quello del pranzo, a pranzo riprende il fondo lasciato la sera prima.</p>'+
+    '<div class="tip">Quando compare la barra gialla "Ripreso dal conteggio…", quei numeri sono solo un punto di partenza: vanno verificati sul cassetto, non confermati a occhi chiusi. Il link "azzera" svuota tutto se preferisci ricontare da zero.</div>'},
+
+ {t:'Dove trovare i numeri degli incassi',
+  h:'<p>I tre valori da inserire nella Principale arrivano da <b>tre posti diversi</b>. Vanno presi uno per uno, non a memoria.</p>'+
+    '<p><b>1. Corrispettivi — dal gestionale sulla cassa principale</b><br>'+
+    'Apri <b>Chiusura giornaliera</b> in Passepartout e leggi <b>Totale incassato</b>.</p>'+
+    '<p><b>2. POS / carte — dal terminale POS</b><br>'+
+    'Sul POS entra in <b>sezione vendite</b> e leggi il totale.</p>'+
+    '<p><b>3. Altri elettronici — dall\'app Satispay</b><br>'+
+    'Apri l\'app e leggi l\'incassato della giornata. Qui vanno anche buoni pasto e bonifici, se ce ne sono stati.</p>'+
+    '<div class="tip">Sia sul POS sia su Satispay <b>controlla le date delle transazioni</b>: se la sera prima non è stata chiusa correttamente, il totale può comprendere anche le operazioni di ieri. In quel caso conta solo quelle di oggi, altrimenti risulterà un ammanco che non esiste.</div>'},
+
+ {t:'Inserire gli incassi',
+  h:'<p>Il bar si limita al conteggio: gli incassi si inseriscono <b>solo nella Principale</b> e valgono per tutta l\'attività, bar compreso.</p>'+
+    '<ul><li><b>Corrispettivi</b> — il totale venduto.</li>'+
+    '<li><b>POS / carte</b> — tutti i pagamenti con carta.</li>'+
+    '<li><b>Altri elettronici</b> — Satispay, buoni pasto, bonifici.</li>'+
+    '<li><b>Fondo iniziale</b> — quanto c\'era nei due cassetti all\'apertura. Di solito è già compilato correttamente: <b>cambialo solo se sai che è sbagliato</b>.</li></ul>'+
+    '<p>A pranzo si inseriscono i valori del solo servizio pranzo; la sera quelli dell\'<b>intera giornata</b>, non della sola cena.</p>'+
+    '<div class="good">Controllo utile: in Passepartout, sotto "Totale incassato suddiviso per tipo pagamento", la colonna <b>Contanti</b> dice quanto contante dovrebbe essere entrato. Se non torna con il conteggio, l\'errore è quasi sempre in un\'uscita di cassa non registrata.</div>'},
+
+ {t:'Le uscite di cassa',
+  h:'<p>Ogni volta che escono soldi dal cassetto senza essere una vendita — il fornitore del pane, una spesa urgente, un rimborso — vanno registrati in <b>Uscite di cassa</b> con importo e motivo.</p>'+
+    '<p>Se non le registri, quei soldi risultano semplicemente mancanti e l\'app segnala un ammanco che in realtà non esiste.</p>'+
+    '<div class="tip">È la causa più frequente di differenze inspiegabili.</div>'},
+
+ {t:'Leggere il risultato',
+  h:'<p>Il riquadro colorato dice subito com\'è andata:</p>'+
+    '<ul><li><b>Verde "Quadra"</b> — contante e vendite coincidono.</li>'+
+    '<li><b>Giallo</b> — c\'è una piccola differenza, entro la soglia tollerata.</li>'+
+    '<li><b>Rosso</b> — la differenza supera la soglia: prima di salvare devi scrivere una <b>nota</b> che spieghi cosa è successo.</li></ul>'+
+    '<p>Sotto trovi i tre numeri del calcolo: <b>Atteso</b>, <b>Contato</b> e <b>Differenza</b>.</p>'+
+    '<div class="tip">Una differenza va sempre cercata prima nelle uscite non registrate e nei conteggi, non data per persa.</div>'},
+
+ {t:'La chiusura serale',
+  h:'<p>La sera, dopo il conteggio, l\'app calcola da sola <b>cosa prelevare e cosa lasciare</b> in ciascuna cassa. Non devi decidere nulla:</p>'+
+    '<ul><li><b>Preleva</b> — i tagli da togliere e portare via.</li>'+
+    '<li><b>Lascia in cassa</b> — quello che resta come fondo per domani.</li></ul>'+
+    '<p>Le regole che segue: le banconote da <b>50 e 100 escono sempre</b> (nel fondo non servirebbero a dare resto) e le <b>monete restano</b>, si toccano solo se non c\'è altro modo.</p>'+
+    '<p>Se il fondo non arriva al minimo, compare <b>Integra il fondo</b>: scegli se prendere i tagli dall\'altra cassa o dalla riserva, e premi "Proponi i tagli".</p>'},
+
+ {t:'Salvare e condividere',
+  h:'<p>Premi <b>Salva check</b> per registrare. Fino a quel momento non è salvato niente e gli altri non vedono nulla.</p>'+
+    '<p>Dopo il salvataggio compare il <b>Riepilogo da condividere</b>, con tre pulsanti: <b>Condividi</b> (WhatsApp, mail), <b>Copia</b> o <b>Scarica</b>.</p>'+
+    '<p>Un check salvato si blocca per evitare modifiche accidentali. Per correggerlo usa <b>Sblocca</b>, cambia quello che serve e <b>risalva</b>.</p>'+
+    '<div class="good">La spunta verde sui pulsanti Pranzo e Sera indica il turno già registrato. Sulle casse compare solo quando entrambi i turni sono fatti.</div>'},
+
+ {t:'Le regole d\'oro',
+  h:'<ul><li><b>Bar prima, Principale dopo.</b> Sempre.</li>'+
+    '<li><b>Conta davvero.</b> I numeri precompilati sono una comodità, non un conteggio.</li>'+
+    '<li><b>Registra ogni uscita di cassa</b>, anche pochi euro.</li>'+
+    '<li><b>Salva.</b> Senza salvare, il lavoro è perso e la Principale resta bloccata.</li>'+
+    '<li><b>Non modificare il fondo iniziale</b> se non sai perché lo stai facendo: è la causa tipica di differenze inventate.</li>'+
+    '<li><b>Se qualcosa non torna</b>, scrivilo nella nota: serve a ricostruire cos\'è successo giorni dopo.</li></ul>'+
+    '<div class="good">In alto a destra l\'indicatore mostra se i dati sono sincronizzati. Se dice "offline", puoi lavorare lo stesso: i dati partono appena torna la connessione.</div>'}
+];
+var gI=0;
+function gRender(){
+  var g=GUIDE[gI];
+  $('gTitle').textContent=g.t;
+  $('gStep').textContent='Passo '+(gI+1)+' di '+GUIDE.length;
+  $('gBody').innerHTML=g.h;
+  $('gBody').scrollTop=0;
+  $('gPrev').disabled = gI===0;
+  $('gNext').textContent = gI===GUIDE.length-1 ? 'Ho capito' : 'Avanti ›';
+  var d=''; for(var i=0;i<GUIDE.length;i++) d+='<i'+(i===gI?' class="on"':'')+'></i>';
+  $('gDots').innerHTML=d;
+}
+function gOpen(){ gI=0; gRender(); $('guide').classList.remove('hide'); }
+function gClose(){ $('guide').classList.add('hide'); }
+$('helpBtn').onclick=gOpen;
+$('gClose').onclick=gClose;
+$('gPrev').onclick=function(){ if(gI>0){ gI--; gRender(); } };
+$('gNext').onclick=function(){ if(gI<GUIDE.length-1){ gI++; gRender(); } else gClose(); };
+$('guide').onclick=function(e){ if(e.target===$('guide')) gClose(); };
+document.addEventListener('keydown',function(e){
+  if($('guide').classList.contains('hide')) return;
+  if(e.key==='Escape') gClose();
+  if(e.key==='ArrowRight') $('gNext').click();
+  if(e.key==='ArrowLeft' && gI>0) $('gPrev').click();
+});
 
 /* ===================== avvio ===================== */
 var booted=false;
