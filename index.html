@@ -461,6 +461,10 @@ textarea:focus{border-color:var(--ink);}
     <div class="card" id="cUscite">
       <div class="chead"><h2>Uscite di cassa</h2><span class="hint">fornitori, spese</span>
         <span class="live" id="uTot">€ 0,00</span></div>
+      <div class="row hide" id="uPranzoRow">
+        <span class="k">Uscite del pranzo<small>già registrate nel check del pranzo</small></span>
+        <span class="v" id="uPranzo">€ 0,00</span>
+      </div>
       <div id="uList"></div>
       <button class="add" id="uAdd">+ Aggiungi uscita</button>
     </div>
@@ -614,7 +618,10 @@ var cassa='principale', turno='pranzo', date=today();
 var qty={}, uscite=[], soglia=5, locked=false, hist=[];
 var lastFondo=null, lastFondoBar=null, refPranzo=null;
 var targetOverride=null, targetOverrideB=null;
-var barCheck=null, savedBy='', prefillLabel='';
+var barCheck=null, savedBy='', prefillLabel='', uscitePranzo=0;
+/* bozze non salvate, tenute in memoria mentre si naviga tra casse
+   e turni: si perdono alla chiusura dell'app, mai scritte sul database */
+var drafts={}, curKey=null;
 var integ={ principale:{src:'riserva',qty:{}}, bar:{src:'altra',qty:{}} };
 var calc={}, chiusura={keep:{},take:{},keepTot:0,takeTot:0,inRange:true};
 
@@ -792,11 +799,14 @@ function recalc(){
 
   var fondoP=num($('fFondo').value), fondoB=num($('fFondoBar').value);
   var corr=num($('fCorr').value), pos=num($('fPos').value), altri=num($('fAltri').value);
-  var uTot = full ? uscite.reduce(function(s,u){return s+num(u.importo);},0) : 0;
+  var uSera = full ? uscite.reduce(function(s,u){return s+num(u.importo);},0) : 0;
+  var uTot  = full ? r2(uSera + uscitePranzo) : 0;
 
   $('live').textContent=eur(contatoP);
   $('gTot').textContent=eur(contatoP);
   $('uTot').textContent=eur(uTot);
+  $('uPranzoRow').classList.toggle('hide', !(full && turno==='sera' && uscitePranzo>0));
+  $('uPranzo').textContent=eur(uscitePranzo);
 
   /* riepilogo delle due casse (solo nella principale) */
   if(full){
@@ -851,7 +861,8 @@ function recalc(){
 
   calc={contatoP:contatoP,contatoB:contatoB,contato:contatoTot,
         fondoP:fondoP,fondoB:fondoB,corr:corr,pos:pos,altri:altri,
-        uTot:uTot,atteso:atteso,diff:diff,ready:ready,full:full};
+        uSera:uSera,uPranzo:uscitePranzo,uTot:uTot,
+        atteso:atteso,diff:diff,ready:ready,full:full};
 
   if(turno==='sera') renderChiusura();
   renderConfronto();
@@ -1151,6 +1162,8 @@ function buildSummary(){
     if(calc.altri) L.push(ln('Altri elettronici','− '+eur(calc.altri)));
     if(calc.uTot){
       L.push(ln('Uscite di cassa','− '+eur(calc.uTot)));
+      if(calc.uPranzo)
+        L.push('  · '+pad('dal check pranzo',17)+padL(eur(calc.uPranzo),13));
       uscite.forEach(function(u){
         if(num(u.importo)) L.push('  · '+pad((u.motivo||'senza causale').slice(0,16),17)+padL(eur(num(u.importo)),13));
       });
@@ -1298,9 +1311,36 @@ $('unlock').onclick=function(){
   $('msg').textContent='Check sbloccato — ricordati di risalvare.';
 };
 
+/* ===================== bozze in memoria ===================== */
+function draftKey(c,d,t){ return c+'|'+d+'|'+t; }
+function clone(o){ try{ return JSON.parse(JSON.stringify(o)); }catch(e){ return o; } }
+
+function stashDraft(){
+  if(!curKey || locked) return;          /* un check salvato non è una bozza */
+  var st={
+    qty:clone(qty), uscite:clone(uscite), integ:clone(integ),
+    corr:$('fCorr').value, pos:$('fPos').value, altri:$('fAltri').value,
+    fondoP:$('fFondo').value, fondoB:$('fFondoBar').value, nota:$('fNota').value,
+    target:targetOverride, targetB:targetOverrideB, prefill:prefillLabel
+  };
+  var haQualcosa = sumQty(qty)>0 || st.corr!=='' || st.pos!=='' || st.altri!=='' ||
+                   uscite.length>0 || st.nota!=='';
+  if(haQualcosa) drafts[curKey]=st; else delete drafts[curKey];
+}
+
+function restoreDraft(st){
+  qty=st.qty||{}; uscite=st.uscite||[];
+  integ=st.integ||{ principale:{src:'riserva',qty:{}}, bar:{src:'altra',qty:{}} };
+  $('fCorr').value=st.corr; $('fPos').value=st.pos; $('fAltri').value=st.altri;
+  $('fFondo').value=st.fondoP; $('fFondoBar').value=st.fondoB; $('fNota').value=st.nota;
+  targetOverride=st.target; targetOverrideB=st.targetB; prefillLabel=st.prefill||'';
+}
+
 /* ===================== caricamento ===================== */
 async function load(){
+  stashDraft();                                  /* conserva ciò che si stava compilando */
   var C=CASSE[cassa], full=C.full;
+  curKey=draftKey(cassa,date,turno);
   $('msg').textContent='';
   qty={}; uscite=[]; targetOverride=null; targetOverrideB=null; savedBy=''; prefillLabel='';
   integ={ principale:{src:'riserva',qty:{}}, bar:{src:'altra',qty:{}} };
@@ -1322,10 +1362,16 @@ async function load(){
     if(bc){ try{ barCheck=JSON.parse(bc); }catch(e){} }
   }
 
-  refPranzo=null;
+  refPranzo=null; uscitePranzo=0;
   if(turno==='sera'){
     var rp=await store.get(key(cassa,date,'pranzo'));
     if(rp){ try{ refPranzo=JSON.parse(rp); }catch(e){} }
+    /* le uscite fatte a pranzo valgono per tutta la giornata:
+       i corrispettivi serali comprendono anche il pranzo, quindi
+       vanno sottratte anche qui, senza ridigitarle */
+    if(refPranzo && refPranzo.uscite){
+      refPranzo.uscite.forEach(function(u){ uscitePranzo=r2(uscitePranzo+num(u.importo)); });
+    }
   }
 
   Array.prototype.forEach.call(document.querySelectorAll('#segC button'),
@@ -1373,8 +1419,13 @@ async function load(){
       if(e.target!==undefined && e.target!==null) targetOverride=e.target;
       if(e.targetB!==undefined && e.targetB!==null) targetOverrideB=e.targetB;
       if(e.integ) integ=e.integ;
+      delete drafts[curKey];        /* salvato: la bozza non serve più */
       setLocked(true);
     }catch(err){ setLocked(false); }
+  } else if(drafts[curKey]){
+    setLocked(false);
+    restoreDraft(drafts[curKey]);
+    $('msg').textContent='Bozza ripresa — non ancora salvata.';
   } else { setLocked(false); applyPrefill(); }
 
   buildGrid(); renderPrefill(); renderUscite(); renderPromemoria(); renderDone(); recalc();
@@ -1435,6 +1486,7 @@ $('save').onclick=async function(){
     }
   }
 
+  delete drafts[curKey];
   setLocked(true); renderPrefill(); renderDone();
   $('msg').textContent='Check salvato.'; showShare(); renderHist();
 };

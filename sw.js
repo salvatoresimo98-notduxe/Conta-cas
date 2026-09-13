@@ -1,7 +1,7 @@
 /* Quadra — service worker
    IMPORTANTE: incrementa VERSION a ogni modifica dell'app,
    altrimenti il tablet continuerà a mostrare la versione vecchia. */
-const VERSION = 'v22';
+const VERSION = 'v24';
 const CACHE = 'conta-cassa-' + VERSION;
 
 const ASSETS = [
