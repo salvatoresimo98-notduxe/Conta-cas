@@ -192,6 +192,24 @@ textarea:focus{border-color:var(--ink);}
 .arcday{font-size:.7rem;font-weight:800;color:var(--faint);margin:12px 0 6px;}
 .arcday:first-child{margin-top:0;}
 
+/* ============ storico uscite ============ */
+#uscArc{position:fixed;inset:0;z-index:90;background:rgba(31,29,24,.5);
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.urowa{display:flex;align-items:baseline;gap:10px;padding:8px 0;border-bottom:1px solid var(--rule);}
+.urowa:last-child{border-bottom:none;}
+.urowa .um{flex:1;font-size:.86rem;font-weight:600;}
+.urowa .um small{display:block;color:var(--faint);font-weight:500;font-size:.71rem;margin-top:1px;}
+.urowa .ui{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.9rem;white-space:nowrap;}
+.uday{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:.71rem;font-weight:800;color:var(--faint);margin:14px 0 2px;
+  padding-top:10px;border-top:1px solid var(--rule);}
+.uday:first-child{margin-top:0;padding-top:0;border-top:none;}
+.uday .ut{font-family:'JetBrains Mono',monospace;color:var(--soft);}
+.utot{display:flex;justify-content:space-between;align-items:baseline;
+  background:var(--bg);border-radius:9px;padding:11px 12px;margin-bottom:4px;
+  font-size:.85rem;font-weight:800;}
+.utot .v{font-family:'JetBrains Mono',monospace;font-size:1.05rem;}
+
 /* ============ guida ============ */
 .helpb{width:26px;height:26px;border-radius:50%;border:1px solid var(--rule);
   background:var(--card);color:var(--soft);font-size:.82rem;font-weight:800;
@@ -295,6 +313,19 @@ textarea:focus{border-color:var(--ink);}
 </style>
 </head>
 <body>
+
+<div id="uscArc" class="hide">
+  <div class="gbox">
+    <div class="ghead">
+      <div>
+        <div class="gtitle">Storico uscite di cassa</div>
+        <div class="gstep" id="uscCount"></div>
+      </div>
+      <button class="gclose" id="uscClose" aria-label="Chiudi">×</button>
+    </div>
+    <div class="gbody" id="uscBody"></div>
+  </div>
+</div>
 
 <div id="archive" class="hide">
   <div class="gbox">
@@ -525,6 +556,7 @@ textarea:focus{border-color:var(--ink);}
 <div class="hist">
   <div class="histh">
     <h2>Ultimi check</h2>
+    <button class="allb" id="uscBtn">Storico uscite</button>
     <button class="allb" id="allBtn">Storico completo</button>
   </div>
   <div id="histList"><div class="hempty">Caricamento…</div></div>
@@ -1484,6 +1516,60 @@ function renderArchive(){
     body.appendChild(histRow(h, function(){ $('archive').classList.add('hide'); }, true));
   });
 }
+/* ============ storico uscite ============
+   Le uscite sono dentro i check della principale: le ricavo dalla
+   copia locale dei documenti, senza letture aggiuntive.        */
+function collectUscite(){
+  var out=[], id, m, raw, e, i;
+  for(id in kvCache){
+    m = id.match(/^chk_principale_(\d{4}-\d{2}-\d{2})_(pranzo|sera)$/);
+    if(!m) continue;
+    raw = kvCache[id];
+    try{ e=JSON.parse(raw); }catch(err){ continue; }
+    if(!e.uscite || !e.uscite.length) continue;
+    for(i=0;i<e.uscite.length;i++){
+      var imp=num(e.uscite[i].importo);
+      if(!imp) continue;
+      out.push({ d:m[1], t:m[2], motivo:(e.uscite[i].motivo||'').trim(),
+                 importo:imp, by:e.by||'' });
+    }
+  }
+  out.sort(function(a,b){ return b.d.localeCompare(a.d) || (a.t==='sera'?-1:1); });
+  return out;
+}
+
+function renderUsciteArc(){
+  var body=$('uscBody'), list=collectUscite();
+  var tot=0; list.forEach(function(u){ tot=r2(tot+u.importo); });
+
+  $('uscCount').textContent = list.length===0 ? 'nessuna uscita registrata'
+    : list.length+(list.length===1?' uscita registrata':' uscite registrate');
+
+  if(!list.length){
+    body.innerHTML='<div class="hempty">Nessuna uscita di cassa registrata finora.</div>';
+    return;
+  }
+
+  var h='<div class="utot"><span>Totale uscite</span><span class="v">'+eur(tot)+'</span></div>';
+  var lastDay=null, dayTot;
+  list.forEach(function(u,i){
+    if(u.d!==lastDay){
+      lastDay=u.d;
+      dayTot=0;
+      list.forEach(function(x){ if(x.d===u.d) dayTot=r2(dayTot+x.importo); });
+      h+='<div class="uday"><span>'+fmtD(u.d)+'</span><span class="ut">'+eur(dayTot)+'</span></div>';
+    }
+    h+='<div class="urowa"><span class="um">'+(u.motivo||'senza causale')+
+       '<small>'+(u.t==='pranzo'?'Pranzo':'Sera')+(u.by?' · '+String(u.by).split('@')[0]:'')+
+       '</small></span><span class="ui">'+eur(u.importo)+'</span></div>';
+  });
+  body.innerHTML=h;
+  body.scrollTop=0;
+}
+$('uscBtn').onclick=function(){ renderUsciteArc(); $('uscArc').classList.remove('hide'); };
+$('uscClose').onclick=function(){ $('uscArc').classList.add('hide'); };
+$('uscArc').onclick=function(e){ if(e.target===$('uscArc')) $('uscArc').classList.add('hide'); };
+
 $('allBtn').onclick=function(){ renderArchive(); $('archive').classList.remove('hide'); };
 $('arcClose').onclick=function(){ $('archive').classList.add('hide'); };
 $('archive').onclick=function(e){ if(e.target===$('archive')) $('archive').classList.add('hide'); };
@@ -1528,7 +1614,7 @@ $('wipe').onclick=async function(){
    Quando l'altro dispositivo salva un check, questo si aggiorna
    da solo: lo storico si ricarica sempre, la schermata aperta solo
    se non la stai compilando in quel momento.                      */
-var liveOff=null;
+var liveOff=null, kvCache={};
 function startLive(){
   if(liveOff) return;
   /* includeMetadataChanges: senza questo il listener non viene
@@ -1545,6 +1631,11 @@ function startLive(){
       var d=snap.docs.filter(function(x){return x.id==='hist';})[0];
       if(d){ try{ hist=JSON.parse(d.data().v)||[]; renderHist(); renderDone(); }catch(e){} }
     }
+    /* tiene in memoria tutti i documenti: serve allo storico uscite
+       senza dover rileggere il database */
+    kvCache={};
+    snap.docs.forEach(function(x){ kvCache[x.id]=x.data().v; });
+
     if(viewChanged && locked) load();
     setSync(!snap.metadata.fromCache);
   }, function(err){
@@ -1681,6 +1772,9 @@ $('gPrev').onclick=function(){ if(gI>0){ gI--; gRender(); } };
 $('gNext').onclick=function(){ if(gI<GUIDE.length-1){ gI++; gRender(); } else gClose(); };
 $('guide').onclick=function(e){ if(e.target===$('guide')) gClose(); };
 document.addEventListener('keydown',function(e){
+  if(e.key==='Escape' && !$('uscArc').classList.contains('hide')){
+    $('uscArc').classList.add('hide'); return;
+  }
   if(e.key==='Escape' && !$('archive').classList.contains('hide')){
     $('archive').classList.add('hide'); return;
   }
