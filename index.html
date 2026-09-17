@@ -192,6 +192,74 @@ textarea:focus{border-color:var(--ink);}
 .arcday{font-size:.7rem;font-weight:800;color:var(--faint);margin:12px 0 6px;}
 .arcday:first-child{margin-top:0;}
 
+/* ============ vista guidata ============ */
+.gh{display:none !important;}
+body.guided .cols{flex-direction:column;max-width:680px;margin:0 auto;}
+body.guided .colA,body.guided .colB{flex:none;width:100%;}
+body.guided .hist,body.guided .foot{display:none;}
+body.guided.glast .hist,body.guided.glast .foot{display:block;}
+#gnav{max-width:680px;margin:16px auto 0;}
+.gprog{display:flex;gap:5px;margin-bottom:10px;}
+.gprog i{flex:1;height:5px;border-radius:3px;background:var(--rule);display:block;}
+.gprog i.on{background:var(--ink);} .gprog i.done{background:var(--green);}
+.gtit{font-size:1.05rem;font-weight:800;line-height:1.2;}
+.gsub{font-size:.76rem;color:var(--faint);font-weight:600;margin-top:2px;}
+#gfoot{display:flex;gap:10px;max-width:680px;margin:14px auto 0;}
+#gfoot .btn.g{flex:0 0 auto;}
+#gfoot .btn.p{flex:1;}
+
+/* ============ impostazioni vista ============ */
+#viewSet,#confirmSave{position:fixed;inset:0;z-index:96;background:rgba(31,29,24,.5);
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.vsl{font-size:.72rem;font-weight:800;color:var(--faint);margin-bottom:6px;}
+.vsseg{width:100%;}
+.vsseg button{flex:1;}
+.vsd{font-size:.78rem;color:var(--soft);margin-top:8px;line-height:1.45;}
+#csBody .row .k{font-size:.86rem;}
+
+/* ============ data non di oggi ============ */
+.notoday{font-size:.68rem;font-weight:800;padding:4px 9px;border-radius:20px;
+  background:var(--red-bg);color:var(--red);cursor:pointer;white-space:nowrap;margin-left:4px;}
+
+/* ============ testo grande ============ */
+html.big{font-size:18px;}
+html.big .dstep{width:40px;height:40px;font-size:1.3rem;}
+html.big .dcell input{width:54px;height:40px;font-size:1.15rem;}
+html.big .dgrid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
+html.big .fld input{height:46px;font-size:1.1rem;width:132px;}
+html.big .urow input.m,html.big .urow input.i,html.big .urow select{height:44px;}
+html.big .btn{height:58px;font-size:1.05rem;}
+html.big .seg button{padding:9px 15px;}
+html.big .verd .big{font-size:1.5rem;}
+
+/* ============ acconti ============ */
+.addrow{display:flex;gap:7px;}
+.addrow .add{flex:1;}
+.urow.acc input.i,.urow.acc select{border-color:#d9c9a8;}
+.urow select{flex:1;height:38px;padding:0 8px;font-family:inherit;font-size:.86rem;
+  border:1px solid var(--rule);border-radius:9px;background:var(--card);color:var(--ink);outline:none;}
+.urow .perbtn{width:34px;height:38px;border:1px solid var(--rule);border-radius:9px;
+  background:var(--bg);color:var(--soft);font-size:1rem;line-height:1;padding:0;flex-shrink:0;}
+.acctag{font-size:.6rem;font-weight:800;color:var(--amber);background:var(--amber-bg);
+  padding:3px 6px;border-radius:5px;flex-shrink:0;letter-spacing:.03em;}
+#persone{position:fixed;inset:0;z-index:95;background:rgba(31,29,24,.5);
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.peradd{display:flex;gap:7px;margin-bottom:12px;}
+.peradd input{flex:1;height:42px;padding:0 11px;font-size:.9rem;border:1px solid var(--rule);
+  border-radius:9px;background:var(--card);outline:none;}
+.peradd button{border:none;background:var(--ink);color:#fff;font-size:.83rem;font-weight:700;
+  padding:0 16px;border-radius:9px;}
+.perrow{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--rule);}
+.perrow:last-child{border-bottom:none;}
+.perrow span{flex:1;font-size:.88rem;font-weight:600;}
+.perrow button{border:none;background:none;color:var(--faint);font-size:1.2rem;line-height:1;padding:0 4px;}
+#accArc{position:fixed;inset:0;z-index:90;background:rgba(31,29,24,.5);
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+.accper{display:flex;justify-content:space-between;align-items:baseline;
+  font-size:.82rem;font-weight:800;margin:16px 0 4px;padding-top:11px;border-top:1px solid var(--rule);}
+.accper:first-child{margin-top:0;padding-top:0;border-top:none;}
+.accper .v{font-family:'JetBrains Mono',monospace;}
+
 /* ============ storico uscite ============ */
 #uscArc{position:fixed;inset:0;z-index:90;background:rgba(31,29,24,.5);
   display:flex;align-items:center;justify-content:center;padding:16px;}
@@ -314,6 +382,72 @@ textarea:focus{border-color:var(--ink);}
 </head>
 <body>
 
+<div id="viewSet" class="hide">
+  <div class="gbox" style="max-width:400px">
+    <div class="ghead">
+      <div><div class="gtitle">Vista</div>
+        <div class="gstep">impostazioni di questo dispositivo</div></div>
+      <button class="gclose" id="vsClose" aria-label="Chiudi">×</button>
+    </div>
+    <div class="gbody">
+      <div class="vsl">Modalità</div>
+      <div class="seg vsseg" id="vsMode">
+        <button data-v="guided">Guidata</button>
+        <button data-v="full">Completa</button>
+      </div>
+      <div class="vsd" id="vsDesc"></div>
+      <div class="vsl" style="margin-top:16px">Dimensione</div>
+      <div class="seg vsseg" id="vsSize">
+        <button data-v="0">Normale</button>
+        <button data-v="1">Testo grande</button>
+      </div>
+      <div class="vsd">Caratteri e pulsanti più ampi, per il tablet al banco.</div>
+    </div>
+  </div>
+</div>
+
+<div id="confirmSave" class="hide">
+  <div class="gbox" style="max-width:400px">
+    <div class="ghead">
+      <div><div class="gtitle">Salvare il check?</div>
+        <div class="gstep" id="csWhen"></div></div>
+    </div>
+    <div class="gbody" id="csBody"></div>
+    <div class="gfoot">
+      <button class="gnav" id="csNo">Annulla</button>
+      <button class="gnav p" id="csYes">Salva</button>
+    </div>
+  </div>
+</div>
+
+<div id="persone" class="hide">
+  <div class="gbox" style="max-width:380px">
+    <div class="ghead">
+      <div><div class="gtitle">Persone</div>
+        <div class="gstep">elenco per gli acconti</div></div>
+      <button class="gclose" id="perClose" aria-label="Chiudi">×</button>
+    </div>
+    <div class="gbody">
+      <div class="peradd">
+        <input type="text" id="perNew" placeholder="Nome" maxlength="24">
+        <button id="perAdd">Aggiungi</button>
+      </div>
+      <div id="perList"></div>
+    </div>
+  </div>
+</div>
+
+<div id="accArc" class="hide">
+  <div class="gbox">
+    <div class="ghead">
+      <div><div class="gtitle">Storico acconti</div>
+        <div class="gstep" id="accCount"></div></div>
+      <button class="gclose" id="accClose" aria-label="Chiudi">×</button>
+    </div>
+    <div class="gbody" id="accBody"></div>
+  </div>
+</div>
+
 <div id="uscArc" class="hide">
   <div class="gbox">
     <div class="ghead">
@@ -397,8 +531,10 @@ textarea:focus{border-color:var(--ink);}
     </div>
     <div class="dnav">
       <button id="prev">‹</button><span id="dLbl">—</span><button id="next">›</button>
+      <span class="notoday hide" id="notToday" title="Torna a oggi">non è oggi</span>
       <span class="today" id="today">oggi</span>
     </div>
+    <button class="helpb" id="viewBtn" aria-label="Vista" title="Vista">⚙</button>
     <button class="helpb" id="helpBtn" aria-label="Guida">?</button>
     <span id="lockB"></span>
     <span class="sync off" id="syncB">connessione…</span>
@@ -407,11 +543,17 @@ textarea:focus{border-color:var(--ink);}
 </header>
 
 <div class="wrap">
+<div id="gnav" class="hide">
+  <div class="gprog" id="gProg"></div>
+  <div class="gtit" id="gTit"></div>
+  <div class="gsub" id="gSub"></div>
+</div>
+
 <div class="cols">
 
   <!-- ===== colonna A : conteggio ===== -->
   <div class="colA">
-    <div class="card">
+    <div class="card" id="cConta">
       <div class="chead">
         <h2>Conteggio contante</h2>
         <span class="hint">inserisci solo le quantità</span>
@@ -466,7 +608,10 @@ textarea:focus{border-color:var(--ink);}
         <span class="v" id="uPranzo">€ 0,00</span>
       </div>
       <div id="uList"></div>
-      <button class="add" id="uAdd">+ Aggiungi uscita</button>
+      <div class="addrow">
+        <button class="add" id="uAdd">+ Uscita</button>
+        <button class="add" id="aAdd">+ Acconto</button>
+      </div>
     </div>
 
     <div class="card hide" id="cTotale">
@@ -532,16 +677,18 @@ textarea:focus{border-color:var(--ink);}
       </div>
     </div>
 
-    <div>
+    <div id="cNota">
       <div class="req hide" id="noteReq">Nota obbligatoria: la differenza supera la soglia di € <span id="sLbl">5</span></div>
       <textarea id="fNota" placeholder="Nota o motivazione (facoltativa)"></textarea>
     </div>
 
-    <div class="acts">
-      <button class="btn p" id="save">Salva check</button>
-      <button class="btn g hide" id="unlock">Sblocca</button>
+    <div id="cActs">
+      <div class="acts">
+        <button class="btn p" id="save">Salva check</button>
+        <button class="btn g hide" id="unlock">Sblocca</button>
+      </div>
+      <div class="msg" id="msg"></div>
     </div>
-    <div class="msg" id="msg"></div>
 
     <div class="card hide" id="cShare">
       <div class="chead"><h2>Riepilogo da condividere</h2></div>
@@ -557,10 +704,16 @@ textarea:focus{border-color:var(--ink);}
   </div>
 </div>
 
+<div id="gfoot" class="hide">
+  <button class="btn g" id="gBack">‹ Indietro</button>
+  <button class="btn p" id="gFwd">Avanti ›</button>
+</div>
+
 <div class="hist">
   <div class="histh">
     <h2>Ultimi check</h2>
     <button class="allb" id="uscBtn">Storico uscite</button>
+    <button class="allb" id="accBtn">Storico acconti</button>
     <button class="allb" id="allBtn">Storico completo</button>
   </div>
   <div id="histList"><div class="hempty">Caricamento…</div></div>
@@ -622,6 +775,7 @@ var barCheck=null, savedBy='', prefillLabel='', uscitePranzo=0;
 /* bozze non salvate, tenute in memoria mentre si naviga tra casse
    e turni: si perdono alla chiusura dell'app, mai scritte sul database */
 var drafts={}, curKey=null;
+var persone=[];
 var integ={ principale:{src:'riserva',qty:{}}, bar:{src:'altra',qty:{}} };
 var calc={}, chiusura={keep:{},take:{},keepTot:0,takeTot:0,inRange:true};
 
@@ -776,19 +930,77 @@ function buildGrid(){
 function renderUscite(){
   var l=$('uList'); l.innerHTML='';
   uscite.forEach(function(u,i){
-    var r=document.createElement('div'); r.className='urow';
-    var m=document.createElement('input'); m.className='m';
-    m.placeholder='Motivo (es. fornitore pane)'; m.value=u.motivo||'';
+    var r=document.createElement('div');
+    var isAcc = u.tipo==='acconto';
+    r.className='urow'+(isAcc?' acc':'');
+
+    if(isAcc){
+      var tag=document.createElement('span'); tag.className='acctag'; tag.textContent='ACCONTO';
+      var sel=document.createElement('select');
+      var names=persone.slice();
+      if(u.motivo && names.indexOf(u.motivo)<0) names.push(u.motivo);
+      sel.innerHTML='<option value="">— scegli —</option>'+names.map(function(n){
+        return '<option'+(n===u.motivo?' selected':'')+'>'+n+'</option>'; }).join('');
+      sel.onchange=function(){ u.motivo=sel.value; };
+      var pb=document.createElement('button'); pb.className='perbtn'; pb.textContent='＋';
+      pb.title='Gestisci persone';
+      pb.onclick=function(){ if(locked)return; openPersone(); };
+      r.appendChild(tag); r.appendChild(sel); r.appendChild(pb);
+    } else {
+      var m=document.createElement('input'); m.className='m';
+      m.placeholder='Motivo (es. fornitore pane)'; m.value=u.motivo||'';
+      m.oninput=function(){ u.motivo=m.value; };
+      r.appendChild(m);
+    }
+
     var a=document.createElement('input'); a.className='i'; a.type='number'; a.step='0.01';
     a.inputMode='decimal'; a.placeholder='0,00'; a.value=u.importo||'';
+    a.oninput=function(){ u.importo=a.value; recalc(); };
     var x=document.createElement('button'); x.className='x'; x.textContent='×';
-    m.oninput=function(){u.motivo=m.value;};
-    a.oninput=function(){u.importo=a.value;recalc();};
     x.onclick=function(){ if(locked)return; uscite.splice(i,1); renderUscite(); recalc(); };
-    r.appendChild(m); r.appendChild(a); r.appendChild(x); l.appendChild(r);
+    r.appendChild(a); r.appendChild(x); l.appendChild(r);
   });
 }
-$('uAdd').onclick=function(){ if(locked)return; uscite.push({motivo:'',importo:''}); renderUscite(); };
+
+/* ============ elenco persone ============ */
+async function loadPersone(){
+  var raw=await store.get('dipendenti');
+  if(raw){ try{ persone=JSON.parse(raw)||[]; }catch(e){ persone=[]; } }
+}
+async function savePersone(){ await store.set('dipendenti',JSON.stringify(persone)); }
+function renderPersone(){
+  var l=$('perList');
+  if(!persone.length){ l.innerHTML='<div class="hempty">Nessuna persona in elenco.</div>'; return; }
+  l.innerHTML='';
+  persone.forEach(function(n,i){
+    var r=document.createElement('div'); r.className='perrow';
+    var s1=document.createElement('span'); s1.textContent=n;
+    var x=document.createElement('button'); x.textContent='×'; x.title='Rimuovi';
+    x.onclick=async function(){
+      if(!confirm('Rimuovere '+n+' dall\'elenco? Gli acconti già registrati restano.'))return;
+      persone.splice(i,1); await savePersone(); renderPersone(); renderUscite();
+    };
+    r.appendChild(s1); r.appendChild(x); l.appendChild(r);
+  });
+}
+function openPersone(){ renderPersone(); $('persone').classList.remove('hide'); $('perNew').focus(); }
+$('perClose').onclick=function(){ $('persone').classList.add('hide'); };
+$('persone').onclick=function(e){ if(e.target===$('persone')) $('persone').classList.add('hide'); };
+$('perAdd').onclick=async function(){
+  var n=$('perNew').value.trim();
+  if(!n) return;
+  if(persone.indexOf(n)>=0){ $('perNew').value=''; return; }
+  persone.push(n); persone.sort(function(a,b){ return a.localeCompare(b); });
+  await savePersone(); $('perNew').value=''; renderPersone(); renderUscite();
+};
+$('perNew').onkeydown=function(e){ if(e.key==='Enter') $('perAdd').click(); };
+
+$('uAdd').onclick=function(){ if(locked)return; uscite.push({tipo:'spesa',motivo:'',importo:''}); renderUscite(); };
+$('aAdd').onclick=function(){
+  if(locked)return;
+  if(!persone.length){ openPersone(); return; }
+  uscite.push({tipo:'acconto',motivo:'',importo:''}); renderUscite();
+};
 
 /* ===================== ricalcolo ===================== */
 function recalc(){
@@ -822,10 +1034,19 @@ function recalc(){
 
   var atteso = full ? r2(fondoP+fondoB+corr-pos-altri-uTot) : null;
   var diff   = full ? r2(contatoTot-atteso) : null;
-  var ready  = full ? ($('fCorr').value!=='' && contatoP>0 && !!barCheck) : contatoP>0;
+  /* regola ferma: la chiusura serale non parte senza il check
+     del pranzo della stessa cassa, per entrambe le casse */
+  var mancaPranzo = (turno==='sera' && !refPranzo);
+  var ready = mancaPranzo ? false
+            : full ? ($('fCorr').value!=='' && contatoP>0 && !!barCheck)
+                   : contatoP>0;
 
   var v=$('verd'), big=$('vBig'), sm=$('vSm'), brk=$('vBrk');
-  if(full && !barCheck){
+  if(mancaPranzo){
+    v.className='verd warn'; big.textContent='Manca il check del pranzo';
+    sm.textContent='La chiusura serale di questa cassa non può partire senza il conteggio di metà giornata: senza, non si può sapere in quale servizio è nata una differenza.';
+    brk.classList.add('hide');
+  } else if(full && !barCheck){
     v.className='verd warn'; big.textContent='Manca il conteggio del bar';
     sm.textContent='Registra prima il check della cassa bar per questo turno: serve per la quadratura.';
     brk.classList.add('hide');
@@ -866,6 +1087,7 @@ function recalc(){
 
   if(turno==='sera') renderChiusura();
   renderConfronto();
+  if(view==='guided') renderGuided();
 }
 
 /* ===================== chiusura serale ===================== */
@@ -1165,8 +1387,16 @@ function buildSummary(){
       if(calc.uPranzo)
         L.push('  · '+pad('dal check pranzo',17)+padL(eur(calc.uPranzo),13));
       uscite.forEach(function(u){
-        if(num(u.importo)) L.push('  · '+pad((u.motivo||'senza causale').slice(0,16),17)+padL(eur(num(u.importo)),13));
+        if(num(u.importo) && u.tipo!=='acconto')
+          L.push('  · '+pad((u.motivo||'senza causale').slice(0,16),17)+padL(eur(num(u.importo)),13));
       });
+      var acc=uscite.filter(function(u){ return u.tipo==='acconto' && num(u.importo); });
+      if(acc.length){
+        L.push('  Acconti:');
+        acc.forEach(function(u){
+          L.push('  · '+pad((u.motivo||'senza nome').slice(0,16),17)+padL(eur(num(u.importo)),13));
+        });
+      }
     }
     L.push(new Array(34).join('─'));
     L.push(ln('Contante principale', eur(calc.contatoP)));
@@ -1380,6 +1610,7 @@ async function load(){
     function(b){ b.classList.toggle('on',b.dataset.v===turno); });
 
   $('dLbl').textContent=fmtD(date);
+  $('notToday').classList.toggle('hide', date===today());
   $('cIncassi').classList.toggle('hide',!full);
   $('cUscite').classList.toggle('hide',!full);
   $('cChiusura').classList.toggle('hide', turno!=='sera');
@@ -1430,10 +1661,12 @@ async function load(){
 
   buildGrid(); renderPrefill(); renderUscite(); renderPromemoria(); renderDone(); recalc();
   if(locked) showShare(); else hideShare();
+  gStep = locked ? 99 : 0;
+  renderGuided();
 }
 
 /* ===================== salvataggio ===================== */
-$('save').onclick=async function(){
+async function doSave(){
   if(locked)return;
   var me = fbAuth.currentUser ? (fbAuth.currentUser.email||'') : '';
   var p={ qty:qty, contato:calc.contatoP, nota:$('fNota').value.trim(), by:me, ts:Date.now() };
@@ -1489,7 +1722,117 @@ $('save').onclick=async function(){
   delete drafts[curKey];
   setLocked(true); renderPrefill(); renderDone();
   $('msg').textContent='Check salvato.'; showShare(); renderHist();
+  gStep=99; renderGuided();
 };
+
+/* ===================== preferenze di vista (per dispositivo) =====================
+   Sono preferenze del tablet, non dati: restano in locale.          */
+var view='full', big=false, gStep=0;
+function loadPrefs(){
+  try{ view=localStorage.getItem('quadra:view')||'full';
+       big=localStorage.getItem('quadra:big')==='1'; }catch(e){}
+}
+function savePrefs(){
+  try{ localStorage.setItem('quadra:view',view);
+       localStorage.setItem('quadra:big',big?'1':'0'); }catch(e){}
+}
+function applyView(){
+  document.documentElement.classList.toggle('big',big);
+  document.body.classList.toggle('guided',view==='guided');
+  renderGuided();
+}
+
+/* ===================== vista guidata =====================
+   Stessi dati, stessi calcoli, stessa pagina: cambia solo che le
+   sezioni vengono mostrate un passo alla volta.                   */
+var STEP_ELS=['cConta','cPromemoria','cIncassi','cUscite','cTotale','verd','cConfronto','cChiusura','cNota','cActs','cShare'];
+function vis(id){ var e=$(id); return e && !e.classList.contains('hide'); }
+
+function guidedSteps(){
+  var st=[];
+  st.push({t:'Conta il contante', s:'Inserisci le quantità per ogni taglio', els:['cConta','cPromemoria']});
+  if(vis('cIncassi')) st.push({t:'Incassi', s:'Corrispettivi, POS e altri pagamenti', els:['cIncassi']});
+  if(vis('cUscite'))  st.push({t:'Uscite e acconti', s:'Soldi usciti dal cassetto senza una vendita', els:['cUscite']});
+  var ver=['cTotale','cConfronto','cChiusura'].filter(vis);
+  if(ver.length) st.push({t:'Verifica', s:'Controlla i numeri prima di chiudere', els:ver});
+  st.push({t:'Risultato e salvataggio', s:'Se serve, aggiungi una nota', els:['verd','cNota','cActs','cShare']});
+  return st;
+}
+
+function renderGuided(){
+  var guided = view==='guided';
+  if(!guided){
+    STEP_ELS.forEach(function(id){ var e=$(id); if(e) e.classList.remove('gh'); });
+    $('gnav').classList.add('hide'); $('gfoot').classList.add('hide');
+    document.body.classList.remove('glast');
+    return;
+  }
+  var steps=guidedSteps();
+  if(gStep>=steps.length) gStep=steps.length-1;
+  if(gStep<0) gStep=0;
+  var cur=steps[gStep];
+
+  STEP_ELS.forEach(function(id){
+    var e=$(id); if(!e) return;
+    e.classList.toggle('gh', cur.els.indexOf(id)<0);
+  });
+
+  $('gnav').classList.remove('hide'); $('gfoot').classList.remove('hide');
+  var prog=''; for(var i=0;i<steps.length;i++)
+    prog+='<i class="'+(i<gStep?'done':i===gStep?'on':'')+'"></i>';
+  $('gProg').innerHTML=prog;
+  $('gTit').textContent=cur.t;
+  $('gSub').textContent='Passo '+(gStep+1)+' di '+steps.length+' — '+cur.s;
+  $('gBack').disabled = gStep===0;
+  var last = gStep===steps.length-1;
+  $('gFwd').classList.toggle('hide', last);
+  document.body.classList.toggle('glast', last);
+}
+$('gBack').onclick=function(){ if(gStep>0){ gStep--; renderGuided(); window.scrollTo({top:0,behavior:'smooth'}); } };
+$('gFwd').onclick=function(){ gStep++; renderGuided(); window.scrollTo({top:0,behavior:'smooth'}); };
+
+/* ===================== impostazioni vista ===================== */
+function renderViewSet(){
+  Array.prototype.forEach.call(document.querySelectorAll('#vsMode button'),
+    function(b){ b.classList.toggle('on', b.dataset.v===view); });
+  Array.prototype.forEach.call(document.querySelectorAll('#vsSize button'),
+    function(b){ b.classList.toggle('on', b.dataset.v===(big?'1':'0')); });
+  $('vsDesc').textContent = view==='guided'
+    ? 'Un passo alla volta, con Avanti e Indietro. Consigliata per chi sta imparando.'
+    : 'Tutto su una schermata. Più veloce quando si conosce il flusso.';
+}
+$('viewBtn').onclick=function(){ renderViewSet(); $('viewSet').classList.remove('hide'); };
+$('vsClose').onclick=function(){ $('viewSet').classList.add('hide'); };
+$('viewSet').onclick=function(e){ if(e.target===$('viewSet')) $('viewSet').classList.add('hide'); };
+Array.prototype.forEach.call(document.querySelectorAll('#vsMode button'), function(b){
+  b.onclick=function(){ view=b.dataset.v; gStep=0; savePrefs(); applyView(); renderViewSet(); };
+});
+Array.prototype.forEach.call(document.querySelectorAll('#vsSize button'), function(b){
+  b.onclick=function(){ big=b.dataset.v==='1'; savePrefs(); applyView(); renderViewSet(); };
+});
+
+/* ===================== conferma prima di salvare ===================== */
+function openConfirm(){
+  var C=CASSE[cassa];
+  $('csWhen').textContent=C.nome+' · '+(turno==='pranzo'?'Pranzo':'Sera')+' · '+fmtD(date);
+  var h='';
+  if(calc.full){
+    h+='<div class="row"><span class="k">Contante nelle due casse</span><span class="v">'+eur(calc.contato)+'</span></div>';
+    h+='<div class="row"><span class="k">Contante atteso</span><span class="v">'+eur(calc.atteso)+'</span></div>';
+    var ok=Math.abs(calc.diff)<0.005;
+    h+='<div class="row"><span class="k">Esito</span><span class="v '+(ok?'ok':'bad')+'">'+(ok?'✓ Quadra':sgn(calc.diff))+'</span></div>';
+  } else {
+    h+='<div class="row"><span class="k">Contante contato</span><span class="v">'+eur(calc.contatoP)+'</span></div>';
+  }
+  if(date!==today())
+    h+='<div class="tip" style="margin-top:10px">Attenzione: stai salvando su una data che non è oggi.</div>';
+  $('csBody').innerHTML=h;
+  $('confirmSave').classList.remove('hide');
+}
+$('save').onclick=function(){ if(locked || $('save').disabled) return; openConfirm(); };
+$('csNo').onclick=function(){ $('confirmSave').classList.add('hide'); };
+$('csYes').onclick=async function(){ $('confirmSave').classList.add('hide'); await doSave(); };
+$('notToday').onclick=function(){ date=today(); load(); };
 
 /* ============ segnala i check già registrati oggi ============ */
 function isDone(c,t){
@@ -1583,6 +1926,7 @@ function collectUscite(){
       var imp=num(e.uscite[i].importo);
       if(!imp) continue;
       out.push({ d:m[1], t:m[2], motivo:(e.uscite[i].motivo||'').trim(),
+                 tipo:(e.uscite[i].tipo==='acconto'?'acconto':'spesa'),
                  importo:imp, by:e.by||'' });
     }
   }
@@ -1591,7 +1935,8 @@ function collectUscite(){
 }
 
 function renderUsciteArc(){
-  var body=$('uscBody'), list=collectUscite();
+  var body=$('uscBody');
+  var list=collectUscite().filter(function(u){ return u.tipo!=='acconto'; });
   var tot=0; list.forEach(function(u){ tot=r2(tot+u.importo); });
 
   $('uscCount').textContent = list.length===0 ? 'nessuna uscita registrata'
@@ -1618,6 +1963,45 @@ function renderUsciteArc(){
   body.innerHTML=h;
   body.scrollTop=0;
 }
+/* ============ storico acconti ============ */
+function renderAccArc(){
+  var body=$('accBody');
+  var list=collectUscite().filter(function(u){ return u.tipo==='acconto'; });
+  var tot=0; list.forEach(function(u){ tot=r2(tot+u.importo); });
+
+  $('accCount').textContent = list.length===0 ? 'nessun acconto registrato'
+    : list.length+(list.length===1?' acconto registrato':' acconti registrati');
+
+  if(!list.length){
+    body.innerHTML='<div class="hempty">Nessun acconto registrato finora.</div>';
+    return;
+  }
+
+  /* raggruppati per persona: il dato utile è quanto ha preso ciascuno */
+  var per={};
+  list.forEach(function(u){
+    var n=u.motivo||'senza nome';
+    if(!per[n]) per[n]={tot:0,voci:[]};
+    per[n].tot=r2(per[n].tot+u.importo);
+    per[n].voci.push(u);
+  });
+  var nomi=Object.keys(per).sort(function(a,b){ return per[b].tot-per[a].tot; });
+
+  var h='<div class="utot"><span>Totale acconti</span><span class="v">'+eur(tot)+'</span></div>';
+  nomi.forEach(function(n){
+    h+='<div class="accper"><span>'+n+'</span><span class="v">'+eur(per[n].tot)+'</span></div>';
+    per[n].voci.forEach(function(u){
+      h+='<div class="urowa"><span class="um">'+fmtD(u.d)+
+         '<small>'+(u.t==='pranzo'?'Pranzo':'Sera')+(u.by?' · '+String(u.by).split('@')[0]:'')+
+         '</small></span><span class="ui">'+eur(u.importo)+'</span></div>';
+    });
+  });
+  body.innerHTML=h; body.scrollTop=0;
+}
+$('accBtn').onclick=function(){ renderAccArc(); $('accArc').classList.remove('hide'); };
+$('accClose').onclick=function(){ $('accArc').classList.add('hide'); };
+$('accArc').onclick=function(e){ if(e.target===$('accArc')) $('accArc').classList.add('hide'); };
+
 $('uscBtn').onclick=function(){ renderUsciteArc(); $('uscArc').classList.remove('hide'); };
 $('uscClose').onclick=function(){ $('uscArc').classList.add('hide'); };
 $('uscArc').onclick=function(e){ if(e.target===$('uscArc')) $('uscArc').classList.add('hide'); };
@@ -1734,14 +2118,16 @@ var GUIDE=[
   h:'<p>Serve a <b>contare la cassa e verificare che i conti tornino</b>, due volte al giorno: a fine pranzo e a fine serata.</p>'+
     '<p>Le casse sono due — <b>Principale</b> e <b>Bar</b> — ma la contabilità è una sola: i corrispettivi del registratore comprendono anche le vendite del bar. Il contante è solo diviso in due cassetti.</p>'+
     '<p>Per questo l\'app somma il contante delle due casse e lo confronta con quanto dovrebbe esserci in base alle vendite.</p>'+
-    '<div class="good">Tutto viene salvato online: quello che registra una persona lo vede subito anche l\'altra, su qualsiasi dispositivo.</div>'},
+    '<div class="good">Tutto viene salvato online: quello che registra una persona lo vede subito anche l\'altra, su qualsiasi dispositivo.</div>'+
+    '<div class="tip" style="margin-top:8px">Con il pulsante <b>⚙</b> in alto scegli come vedere l\'app: <b>Guidata</b> (un passo alla volta) o <b>Completa</b> (tutto insieme), e se vuoi il <b>testo grande</b>. La scelta resta su questo dispositivo.</div>'},
 
  {t:'L\'ordine da rispettare',
-  h:'<p>C\'è una sola regola di sequenza, ma è importante:</p>'+
-    '<ol><li><b>Prima il Bar</b> — conta il cassetto e salva.</li>'+
-    '<li><b>Poi la Principale</b> — conta il cassetto e inserisci gli incassi.</li></ol>'+
-    '<p>La Principale ha bisogno del conteggio del bar per fare la quadratura. Se il bar non è stato ancora salvato, al posto del risultato compare <b>"Manca il conteggio del bar"</b> e il salvataggio resta bloccato.</p>'+
-    '<div class="tip">Questa sequenza vale sia a pranzo sia la sera.</div>'},
+  h:'<p>Ci sono due regole di sequenza, e l\'app le fa rispettare da sola.</p>'+
+    '<p><b>1. Prima il Bar, poi la Principale</b><br>'+
+    'La Principale ha bisogno del conteggio del bar per fare la quadratura. Senza, compare <b>"Manca il conteggio del bar"</b> e il salvataggio resta bloccato.</p>'+
+    '<p><b>2. Prima il pranzo, poi la sera</b><br>'+
+    'La chiusura serale non parte se manca il check del pranzo di quella cassa: compare <b>"Manca il check del pranzo"</b>. Vale per entrambe le casse.</p>'+
+    '<div class="tip">Il check di metà giornata non è facoltativo: è quello che permette di capire in quale dei due servizi è nata una differenza. Senza, un ammanco resta senza spiegazione.</div>'},
 
  {t:'Contare il contante',
   h:'<p>Nel riquadro <b>Conteggio contante</b> inserisci solo <b>quante banconote e monete</b> ci sono per ogni taglio. Gli importi li calcola l\'app.</p>'+
@@ -1769,10 +2155,12 @@ var GUIDE=[
     '<p>A pranzo si inseriscono i valori del solo servizio pranzo; la sera quelli dell\'<b>intera giornata</b>, non della sola cena.</p>'+
     '<div class="good">Controllo utile: in Passepartout, sotto "Totale incassato suddiviso per tipo pagamento", la colonna <b>Contanti</b> dice quanto contante dovrebbe essere entrato. Se non torna con il conteggio, l\'errore è quasi sempre in un\'uscita di cassa non registrata.</div>'},
 
- {t:'Le uscite di cassa',
-  h:'<p>Ogni volta che escono soldi dal cassetto senza essere una vendita — il fornitore del pane, una spesa urgente, un rimborso — vanno registrati in <b>Uscite di cassa</b> con importo e motivo.</p>'+
-    '<p>Se non le registri, quei soldi risultano semplicemente mancanti e l\'app segnala un ammanco che in realtà non esiste.</p>'+
-    '<div class="tip">È la causa più frequente di differenze inspiegabili.</div>'},
+ {t:'Uscite di cassa e acconti',
+  h:'<p>Ogni volta che escono soldi dal cassetto senza essere una vendita vanno registrati, altrimenti risultano mancanti e l\'app segnala un ammanco che non esiste. Ci sono due pulsanti:</p>'+
+    '<p><b>+ Uscita</b> — spese dell\'attività: fornitori, acquisti urgenti, rimborsi. Si scrive la causale.</p>'+
+    '<p><b>+ Acconto</b> — anticipi sullo stipendio. Si sceglie la persona da un elenco; il pulsante <b>＋</b> accanto permette di aggiungerne di nuove.</p>'+
+    '<p>Contano allo stesso modo nel calcolo — sono contante che esce — ma restano separati negli storici, così sai quanto ha preso ciascuno.</p>'+
+    '<div class="tip">Le uscite non registrate sono la causa più frequente di differenze inspiegabili.</div>'},
 
  {t:'Leggere il risultato',
   h:'<p>Il riquadro colorato dice subito com\'è andata:</p>'+
@@ -1824,6 +2212,18 @@ $('gPrev').onclick=function(){ if(gI>0){ gI--; gRender(); } };
 $('gNext').onclick=function(){ if(gI<GUIDE.length-1){ gI++; gRender(); } else gClose(); };
 $('guide').onclick=function(e){ if(e.target===$('guide')) gClose(); };
 document.addEventListener('keydown',function(e){
+  if(e.key==='Escape' && !$('confirmSave').classList.contains('hide')){
+    $('confirmSave').classList.add('hide'); return;
+  }
+  if(e.key==='Escape' && !$('viewSet').classList.contains('hide')){
+    $('viewSet').classList.add('hide'); return;
+  }
+  if(e.key==='Escape' && !$('persone').classList.contains('hide')){
+    $('persone').classList.add('hide'); return;
+  }
+  if(e.key==='Escape' && !$('accArc').classList.contains('hide')){
+    $('accArc').classList.add('hide'); return;
+  }
   if(e.key==='Escape' && !$('uscArc').classList.contains('hide')){
     $('uscArc').classList.add('hide'); return;
   }
@@ -1837,6 +2237,7 @@ document.addEventListener('keydown',function(e){
 });
 
 /* ===================== avvio ===================== */
+loadPrefs(); applyView();      /* prima del login: vale anche per la schermata di accesso */
 var booted=false;
 onAuthStateChanged(fbAuth, async function(user){
   if(!user){
@@ -1858,6 +2259,7 @@ onAuthStateChanged(fbAuth, async function(user){
 
   var s=await store.get('soglia'); if(s){ soglia=num(s); $('fSoglia').value=soglia; }
   var h=await store.get('hist'); if(h){ try{ hist=JSON.parse(h); }catch(e){} }
+  await loadPersone();
   renderHist();
   await load();
   renderDone();
