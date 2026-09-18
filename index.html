@@ -776,6 +776,10 @@ var barCheck=null, savedBy='', prefillLabel='', uscitePranzo=0;
    e turni: si perdono alla chiusura dell'app, mai scritte sul database */
 var drafts={}, curKey=null;
 var persone=[];
+/* lo staff lavora solo sulla cassa bar: filtro visivo dell'interfaccia,
+   non un permesso — i dati restano accessibili a entrambi gli account */
+var STAFF_UID='0vQZPEfqGEc342fij5RTItuqlA52';
+var isStaff=false;
 var integ={ principale:{src:'riserva',qty:{}}, bar:{src:'altra',qty:{}} };
 var calc={}, chiusura={keep:{},take:{},keepTot:0,takeTot:0,inRange:true};
 
@@ -1725,6 +1729,25 @@ async function doSave(){
   gStep=99; renderGuided();
 };
 
+/* ===================== ruolo ===================== */
+function applyRole(){
+  if(isStaff){
+    cassa='bar';
+    $('segC').classList.add('hide');       /* niente selettore cassa */
+    $('uscBtn').classList.add('hide');     /* uscite e acconti sono della principale */
+    $('accBtn').classList.add('hide');
+    $('arcC').classList.add('hide');       /* filtro cassa nell'archivio */
+  } else {
+    $('segC').classList.remove('hide');
+    $('uscBtn').classList.remove('hide');
+    $('accBtn').classList.remove('hide');
+    $('arcC').classList.remove('hide');
+  }
+}
+function visibleHist(){
+  return isStaff ? hist.filter(function(h){ return h.c==='bar'; }) : hist;
+}
+
 /* ===================== preferenze di vista (per dispositivo) =====================
    Sono preferenze del tablet, non dati: restano in locale.          */
 var view='full', big=false, gStep=0;
@@ -1844,9 +1867,11 @@ function isDone(c,t){
 function renderDone(){
   /* una cassa è spuntata solo quando ha entrambi i turni registrati;
      i pulsanti turno restano per turno, sulla cassa selezionata */
-  Array.prototype.forEach.call(document.querySelectorAll('#segC button'), function(b){
-    b.classList.toggle('done', isDone(b.dataset.v,'pranzo') && isDone(b.dataset.v,'sera'));
-  });
+  if(!isStaff){
+    Array.prototype.forEach.call(document.querySelectorAll('#segC button'), function(b){
+      b.classList.toggle('done', isDone(b.dataset.v,'pranzo') && isDone(b.dataset.v,'sera'));
+    });
+  }
   Array.prototype.forEach.call(document.querySelectorAll('#segT button'), function(b){
     b.classList.toggle('done', isDone(cassa, b.dataset.v));
   });
@@ -1880,18 +1905,18 @@ function histRow(h, onPick, grouped){
 }
 
 function renderHist(){
-  var l=$('histList');
-  $('allBtn').classList.toggle('hide', hist.length<=4);
-  if(!hist.length){ l.innerHTML='<div class="hempty">Nessun check registrato.</div>'; return; }
+  var l=$('histList'), vis=visibleHist();
+  $('allBtn').classList.toggle('hide', vis.length<=4);
+  if(!vis.length){ l.innerHTML='<div class="hempty">Nessun check registrato.</div>'; return; }
   l.innerHTML='';
-  hist.slice(0,4).forEach(function(h){ l.appendChild(histRow(h)); });
+  vis.slice(0,4).forEach(function(h){ l.appendChild(histRow(h)); });
 }
 
 /* ============ storico completo ============ */
 var arcC='', arcT='';
 function renderArchive(){
   var body=$('arcBody');
-  var list=hist.filter(function(h){
+  var list=visibleHist().filter(function(h){
     return (!arcC || h.c===arcC) && (!arcT || h.t===arcT);
   });
   $('arcCount').textContent = list.length===0 ? 'nessun check'
@@ -2254,6 +2279,9 @@ onAuthStateChanged(fbAuth, async function(user){
     if(liveOff){ liveOff(); liveOff=null; }
     await signOut(fbAuth);
   };
+  isStaff = (user.uid===STAFF_UID);
+  applyRole();
+
   if(booted) return;
   booted=true;
 
