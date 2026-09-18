@@ -730,7 +730,8 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.18.0/fireba
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence }
   from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
-         doc, getDoc, setDoc, deleteDoc, collection, onSnapshot }
+         doc, getDoc, setDoc, deleteDoc, collection, onSnapshot, getDocs,
+         query, orderBy, limit, startAt, endAt }
   from 'https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -1667,6 +1668,7 @@ async function load(){
   if(locked) showShare(); else hideShare();
   gStep = locked ? 99 : 0;
   renderGuided();
+  if(liveHist) watchCurrent();
 }
 
 /* ===================== salvataggio ===================== */
@@ -1724,6 +1726,7 @@ async function doSave(){
   }
 
   delete drafts[curKey];
+  kvCacheAt=0;                       /* archivi da ricaricare alla prossima apertura */
   setLocked(true); renderPrefill(); renderDone();
   $('msg').textContent='Check salvato.'; showShare(); renderHist();
   gStep=99; renderGuided();
@@ -1939,6 +1942,26 @@ function renderArchive(){
 /* ============ storico uscite ============
    Le uscite sono dentro i check della principale: le ricavo dalla
    copia locale dei documenti, senza letture aggiuntive.        */
+/* Carica i check della principale solo quando serve davvero, cioè
+   all'apertura di uno dei due archivi, e solo gli ultimi giorni.
+   La cache dura qualche minuto, così riaprire non ricarica.        */
+var ARCH_GIORNI=90;
+async function ensureArchive(){
+  if(Date.now()-kvCacheAt < 5*60*1000 && Object.keys(kvCache).length) return;
+  var da=shift(today(),-ARCH_GIORNI);
+  try{
+    var q=query(collection(fbDb,'kv'),
+                orderBy('__name__'),
+                startAt('chk_principale_'+da),
+                endAt('chk_principale_\uf8ff'),
+                limit(400));
+    var snap=await getDocs(q);
+    kvCache={};
+    snap.forEach(function(d){ kvCache[d.id]=d.data().v; });
+    kvCacheAt=Date.now();
+  }catch(e){ /* senza rete restano i dati già in cache */ }
+}
+
 function collectUscite(){
   var out=[], id, m, raw, e, i;
   for(id in kvCache){
@@ -2023,11 +2046,21 @@ function renderAccArc(){
   });
   body.innerHTML=h; body.scrollTop=0;
 }
-$('accBtn').onclick=function(){ renderAccArc(); $('accArc').classList.remove('hide'); };
+$('accBtn').onclick=async function(){
+  $('accBody').innerHTML='<div class="hempty">Caricamento…</div>';
+  $('accCount').textContent='';
+  $('accArc').classList.remove('hide');
+  await ensureArchive(); renderAccArc();
+};
 $('accClose').onclick=function(){ $('accArc').classList.add('hide'); };
 $('accArc').onclick=function(e){ if(e.target===$('accArc')) $('accArc').classList.add('hide'); };
 
-$('uscBtn').onclick=function(){ renderUsciteArc(); $('uscArc').classList.remove('hide'); };
+$('uscBtn').onclick=async function(){
+  $('uscBody').innerHTML='<div class="hempty">Caricamento…</div>';
+  $('uscCount').textContent='';
+  $('uscArc').classList.remove('hide');
+  await ensureArchive(); renderUsciteArc();
+};
 $('uscClose').onclick=function(){ $('uscArc').classList.add('hide'); };
 $('uscArc').onclick=function(e){ if(e.target===$('uscArc')) $('uscArc').classList.add('hide'); };
 
@@ -2075,36 +2108,46 @@ $('wipe').onclick=async function(){
    Quando l'altro dispositivo salva un check, questo si aggiorna
    da solo: lo storico si ricarica sempre, la schermata aperta solo
    se non la stai compilando in quel momento.                      */
-var liveOff=null, kvCache={};
-function startLive(){
-  if(liveOff) return;
-  /* includeMetadataChanges: senza questo il listener non viene
-     richiamato quando cambia solo lo stato della connessione,
-     e l'indicatore resterebbe bloccato su "offline". */
-  liveOff = onSnapshot(collection(fbDb,'kv'), {includeMetadataChanges:true}, function(snap){
-    var mine = docId(key(cassa,date,turno));
-    var histChanged=false, viewChanged=false;
-    snap.docChanges().forEach(function(ch){
-      if(ch.doc.id==='hist') histChanged=true;
-      if(ch.doc.id===mine && ch.type!=='removed') viewChanged=true;
-    });
-    if(histChanged){
-      var d=snap.docs.filter(function(x){return x.id==='hist';})[0];
-      if(d){ try{ hist=JSON.parse(d.data().v)||[]; renderHist(); renderDone(); }catch(e){} }
-    }
-    /* tiene in memoria tutti i documenti: serve allo storico uscite
-       senza dover rileggere il database */
-    kvCache={};
-    snap.docs.forEach(function(x){ kvCache[x.id]=x.data().v; });
+var kvCache={}, kvCacheAt=0;
+var liveHist=null, liveDoc=null, liveDocId=null;
 
-    if(viewChanged && locked) load();
-    setSync(!snap.metadata.fromCache);
+/* Ascolta solo i due documenti che servono davvero:
+   l'indice dello storico e il check attualmente aperto.
+   Prima il listener copriva l'intera collezione e a ogni avvio
+   rileggeva tutti i documenti, con un costo che cresceva ogni giorno. */
+function startLive(){
+  if(liveHist) return;
+  liveHist = onSnapshot(doc(fbDb,'kv','hist'), {includeMetadataChanges:true}, function(d){
+    if(d.exists()){
+      try{ hist=JSON.parse(d.data().v)||[]; renderHist(); renderDone(); }catch(e){}
+    }
+    setSync(!d.metadata.fromCache);
   }, function(err){
     var c=(err && err.code)||'';
     if(c.indexOf('permission-denied')>=0) setSync(false,'accesso negato — controlla le regole');
     else setSync(false);
   });
+  watchCurrent();
 }
+
+/* segue il check aperto, così una modifica fatta dall'altro
+   dispositivo si riflette qui senza rileggere nient'altro */
+function watchCurrent(){
+  var id=docId(key(cassa,date,turno));
+  if(liveDocId===id) return;
+  if(liveDoc){ liveDoc(); liveDoc=null; }
+  liveDocId=id;
+  liveDoc = onSnapshot(doc(fbDb,'kv',id), function(d){
+    if(d.exists() && locked && !d.metadata.hasPendingWrites) load();
+  }, function(){});
+}
+
+function stopLive(){
+  if(liveHist){ liveHist(); liveHist=null; }
+  if(liveDoc){ liveDoc(); liveDoc=null; }
+  liveDocId=null;
+}
+
 function setSync(on,msg){
   var b=$('syncB');
   b.className='sync '+(on?'on':'off');
@@ -2268,7 +2311,7 @@ onAuthStateChanged(fbAuth, async function(user){
   if(!user){
     $('gate').style.display='flex';
     $('whoB').textContent='';
-    if(liveOff){ liveOff(); liveOff=null; }
+    stopLive();
     booted=false;
     return;
   }
@@ -2276,7 +2319,7 @@ onAuthStateChanged(fbAuth, async function(user){
   $('whoB').innerHTML = (user.email||'').split('@')[0]+' · <button id="out">esci</button>';
   $('out').onclick=async function(){
     if(!confirm('Uscire dall\'account su questo dispositivo?'))return;
-    if(liveOff){ liveOff(); liveOff=null; }
+    stopLive();
     await signOut(fbAuth);
   };
   isStaff = (user.uid===STAFF_UID);
