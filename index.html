@@ -2332,6 +2332,11 @@ onAuthStateChanged(fbAuth, async function(user){
   var h=await store.get('hist'); if(h){ try{ hist=JSON.parse(h); }catch(e){} }
   await loadPersone();
   renderHist();
+
+  /* si apre sul turno ancora da fare: se il pranzo non è registrato
+     si parte da lì, perché è il primo passaggio della giornata */
+  turno = isDone(cassa,'pranzo') ? 'sera' : 'pranzo';
+
   await load();
   renderDone();
   startLive();
