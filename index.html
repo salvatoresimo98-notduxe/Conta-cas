@@ -1858,7 +1858,7 @@ function openConfirm(){
 $('save').onclick=function(){ if(locked || $('save').disabled) return; openConfirm(); };
 $('csNo').onclick=function(){ $('confirmSave').classList.add('hide'); };
 $('csYes').onclick=async function(){ $('confirmSave').classList.add('hide'); await doSave(); };
-$('notToday').onclick=function(){ date=today(); load(); };
+$('notToday').onclick=function(){ date=today(); autoTurno(); load(); };
 
 /* ============ segnala i check già registrati oggi ============ */
 function isDone(c,t){
@@ -1867,6 +1867,11 @@ function isDone(c,t){
   }
   return false;
 }
+/* sceglie il turno da fare per la cassa e la giornata correnti */
+function autoTurno(){
+  turno = isDone(cassa,'pranzo') ? 'sera' : 'pranzo';
+}
+
 function renderDone(){
   /* una cassa è spuntata solo quando ha entrambi i turni registrati;
      i pulsanti turno restano per turno, sulla cassa selezionata */
@@ -2089,9 +2094,11 @@ Array.prototype.forEach.call(document.querySelectorAll('#segC button'),
   function(b){ b.onclick=function(){ cassa=b.dataset.v; load(); }; });
 Array.prototype.forEach.call(document.querySelectorAll('#segT button'),
   function(b){ b.onclick=function(){ turno=b.dataset.v; load(); }; });
-$('prev').onclick=function(){ date=shift(date,-1); load(); };
-$('next').onclick=function(){ date=shift(date,1); load(); };
-$('today').onclick=function(){ date=today(); load(); };
+/* cambiando giornata il turno va riscelto: ogni giorno riparte
+   dal pranzo, altrimenti resterebbe quello della giornata prima */
+$('prev').onclick=function(){ date=shift(date,-1); autoTurno(); load(); };
+$('next').onclick=function(){ date=shift(date,1); autoTurno(); load(); };
+$('today').onclick=function(){ date=today(); autoTurno(); load(); };
 ['fCorr','fPos','fAltri','fFondo','fFondoBar'].forEach(function(i){ $(i).oninput=recalc; });
 $('fNota').oninput=recalc;
 $('fSoglia').oninput=async function(e){
@@ -2335,7 +2342,7 @@ onAuthStateChanged(fbAuth, async function(user){
 
   /* si apre sul turno ancora da fare: se il pranzo non è registrato
      si parte da lì, perché è il primo passaggio della giornata */
-  turno = isDone(cassa,'pranzo') ? 'sera' : 'pranzo';
+  autoTurno();
 
   await load();
   renderDone();
