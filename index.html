@@ -217,6 +217,21 @@ body.guided.glast .hist,body.guided.glast .foot{display:block;}
 .vsd{font-size:.78rem;color:var(--soft);margin-top:8px;line-height:1.45;}
 #csBody .row .k{font-size:.86rem;}
 
+/* ============ PIN ============ */
+#pinBox{position:fixed;inset:0;z-index:98;background:rgba(31,29,24,.55);
+  display:flex;align-items:center;justify-content:center;padding:16px;}
+#pinIn{width:100%;height:54px;text-align:center;font-family:'JetBrains Mono',monospace;
+  font-size:1.6rem;letter-spacing:.5em;border:1px solid var(--rule);border-radius:11px;
+  background:var(--card);outline:none;}
+#pinIn:focus{border-color:var(--ink);}
+#pinOk{width:100%;height:48px;border:none;border-radius:11px;background:var(--ink);
+  color:#fff;font-size:.93rem;font-weight:800;}
+#pinOk:disabled{background:var(--rule);color:var(--faint);}
+.pinbtns{display:flex;gap:7px;flex-wrap:wrap;}
+.pinbtns button{flex:1;border:1px solid var(--rule);background:var(--card);color:var(--soft);
+  font-size:.8rem;font-weight:700;padding:9px 10px;border-radius:9px;}
+.pinbtns button.hide{display:none;}
+
 /* ============ data non di oggi ============ */
 .notoday{font-size:.68rem;font-weight:800;padding:4px 9px;border-radius:20px;
   background:var(--red-bg);color:var(--red);cursor:pointer;white-space:nowrap;margin-left:4px;}
@@ -382,6 +397,22 @@ html.big .verd .big{font-size:1.5rem;}
 </head>
 <body>
 
+<div id="pinBox" class="hide">
+  <div class="gbox" style="max-width:340px">
+    <div class="ghead">
+      <div><div class="gtitle" id="pinTitle">PIN</div>
+        <div class="gstep" id="pinSub"></div></div>
+      <button class="gclose" id="pinClose" aria-label="Chiudi">×</button>
+    </div>
+    <div class="gbody">
+      <input type="password" inputmode="numeric" id="pinIn" maxlength="6"
+             autocomplete="off" placeholder="••••">
+      <div class="gerr" id="pinErr"></div>
+      <button id="pinOk">Conferma</button>
+    </div>
+  </div>
+</div>
+
 <div id="viewSet" class="hide">
   <div class="gbox" style="max-width:400px">
     <div class="ghead">
@@ -402,6 +433,16 @@ html.big .verd .big{font-size:1.5rem;}
         <button data-v="1">Testo grande</button>
       </div>
       <div class="vsd">Caratteri e pulsanti più ampi, per il tablet al banco.</div>
+      <div id="vsPin">
+        <div class="vsl" style="margin-top:18px">Protezione storici</div>
+        <div class="vsd" id="pinState" style="margin:0 0 9px"></div>
+        <div class="pinbtns">
+          <button id="pinSet">Imposta PIN</button>
+          <button id="pinChg">Cambia PIN</button>
+          <button id="pinDel">Rimuovi</button>
+        </div>
+        <div class="vsd">Vale su tutti i dispositivi.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -1817,6 +1858,126 @@ function renderGuided(){
 $('gBack').onclick=function(){ if(gStep>0){ gStep--; renderGuided(); window.scrollTo({top:0,behavior:'smooth'}); } };
 $('gFwd').onclick=function(){ gStep++; renderGuided(); window.scrollTo({top:0,behavior:'smooth'}); };
 
+/* ===================== PIN degli storici =====================
+   Il PIN non è mai salvato in chiaro: si conserva solo l'impronta
+   (SHA-256 con un sale casuale), sincronizzata tra i dispositivi.
+   È un blocco dell'interfaccia: ferma chi prende il tablet in mano. */
+var pinData=null, pinUntil=0, pinFails=0, pinLockUntil=0;
+var PIN_MINUTI=5;
+
+async function sha256(txt){
+  var buf=new TextEncoder().encode(txt);
+  var h=await crypto.subtle.digest('SHA-256',buf);
+  return Array.prototype.map.call(new Uint8Array(h),
+    function(b){ return ('0'+b.toString(16)).slice(-2); }).join('');
+}
+function newSalt(){
+  var a=new Uint8Array(16); crypto.getRandomValues(a);
+  return Array.prototype.map.call(a,function(b){ return ('0'+b.toString(16)).slice(-2); }).join('');
+}
+async function loadPin(){
+  var raw=await store.get('pin');
+  pinData=null;
+  if(raw){ try{ var o=JSON.parse(raw); if(o && o.hash && o.salt) pinData=o; }catch(e){} }
+}
+async function pinMatches(v){
+  if(!pinData) return false;
+  return (await sha256(pinData.salt+':'+v))===pinData.hash;
+}
+
+var pinResolve=null;
+function askPin(title, sub, err){
+  return new Promise(function(res){
+    pinResolve=res;
+    $('pinTitle').textContent=title;
+    $('pinSub').textContent=sub||'';
+    $('pinErr').textContent=err||'';
+    $('pinIn').value='';
+    $('pinBox').classList.remove('hide');
+    setTimeout(function(){ $('pinIn').focus(); },60);
+  });
+}
+function pinDone(v){
+  $('pinBox').classList.add('hide');
+  var r=pinResolve; pinResolve=null; if(r) r(v);
+}
+$('pinOk').onclick=function(){ pinDone($('pinIn').value.trim()); };
+$('pinClose').onclick=function(){ pinDone(null); };
+$('pinBox').onclick=function(e){ if(e.target===$('pinBox')) pinDone(null); };
+$('pinIn').oninput=function(){ $('pinIn').value=$('pinIn').value.replace(/\D/g,''); };
+$('pinIn').onkeydown=function(e){ if(e.key==='Enter') $('pinOk').click(); };
+
+/* chiede il PIN se impostato; resta sbloccato per qualche minuto */
+async function requirePin(){
+  await loadPin();
+  if(!pinData) return true;
+  if(Date.now()<pinUntil) return true;
+  var err='';
+  while(true){
+    if(Date.now()<pinLockUntil){
+      err='Troppi tentativi. Riprova tra '+Math.ceil((pinLockUntil-Date.now())/1000)+' secondi.';
+    }
+    var v=await askPin('Storico protetto','Inserisci il PIN',err);
+    if(v===null) return false;
+    if(Date.now()<pinLockUntil){ continue; }
+    if(await pinMatches(v)){
+      pinFails=0; pinUntil=Date.now()+PIN_MINUTI*60*1000; return true;
+    }
+    pinFails++;
+    if(pinFails>=5){ pinLockUntil=Date.now()+30000; pinFails=0;
+      err='Troppi tentativi. Riprova tra 30 secondi.'; }
+    else err='PIN errato.';
+  }
+}
+
+/* chiede un PIN nuovo due volte */
+async function askNewPin(){
+  var err='';
+  while(true){
+    var a=await askPin('Nuovo PIN','Da 4 a 6 cifre',err);
+    if(a===null) return null;
+    if(!/^\d{4,6}$/.test(a)){ err='Il PIN deve avere da 4 a 6 cifre.'; continue; }
+    var b=await askPin('Conferma PIN','Inseriscilo di nuovo');
+    if(b===null) return null;
+    if(a!==b){ err='I due PIN non coincidono. Riprova.'; continue; }
+    return a;
+  }
+}
+async function savePin(v){
+  var salt=newSalt();
+  pinData={salt:salt, hash:await sha256(salt+':'+v)};
+  await store.set('pin',JSON.stringify(pinData));
+}
+
+function renderPinSet(){
+  $('vsPin').classList.toggle('hide', isStaff);
+  $('pinState').textContent = pinData
+    ? 'Attiva: gli storici chiedono il PIN, che resta sbloccato per '+PIN_MINUTI+' minuti.'
+    : 'Non attiva: gli storici si aprono senza PIN.';
+  $('pinSet').classList.toggle('hide', !!pinData);
+  $('pinChg').classList.toggle('hide', !pinData);
+  $('pinDel').classList.toggle('hide', !pinData);
+}
+$('pinSet').onclick=async function(){
+  $('viewSet').classList.add('hide');
+  var v=await askNewPin(); if(v) await savePin(v);
+  renderPinSet(); $('viewSet').classList.remove('hide');
+};
+$('pinChg').onclick=async function(){
+  $('viewSet').classList.add('hide');
+  pinUntil=0;
+  if(await requirePin()){ var v=await askNewPin(); if(v) await savePin(v); }
+  renderPinSet(); $('viewSet').classList.remove('hide');
+};
+$('pinDel').onclick=async function(){
+  $('viewSet').classList.add('hide');
+  pinUntil=0;
+  if(await requirePin() && confirm('Rimuovere il PIN? Gli storici torneranno ad aprirsi liberamente.')){
+    await store.del('pin'); pinData=null;
+  }
+  renderPinSet(); $('viewSet').classList.remove('hide');
+};
+
 /* ===================== impostazioni vista ===================== */
 function renderViewSet(){
   Array.prototype.forEach.call(document.querySelectorAll('#vsMode button'),
@@ -1827,7 +1988,9 @@ function renderViewSet(){
     ? 'Un passo alla volta, con Avanti e Indietro. Consigliata per chi sta imparando.'
     : 'Tutto su una schermata. Più veloce quando si conosce il flusso.';
 }
-$('viewBtn').onclick=function(){ renderViewSet(); $('viewSet').classList.remove('hide'); };
+$('viewBtn').onclick=async function(){
+  renderViewSet(); await loadPin(); renderPinSet(); $('viewSet').classList.remove('hide');
+};
 $('vsClose').onclick=function(){ $('viewSet').classList.add('hide'); };
 $('viewSet').onclick=function(e){ if(e.target===$('viewSet')) $('viewSet').classList.add('hide'); };
 Array.prototype.forEach.call(document.querySelectorAll('#vsMode button'), function(b){
@@ -2052,6 +2215,7 @@ function renderAccArc(){
   body.innerHTML=h; body.scrollTop=0;
 }
 $('accBtn').onclick=async function(){
+  if(!(await requirePin())) return;
   $('accBody').innerHTML='<div class="hempty">Caricamento…</div>';
   $('accCount').textContent='';
   $('accArc').classList.remove('hide');
@@ -2061,6 +2225,7 @@ $('accClose').onclick=function(){ $('accArc').classList.add('hide'); };
 $('accArc').onclick=function(e){ if(e.target===$('accArc')) $('accArc').classList.add('hide'); };
 
 $('uscBtn').onclick=async function(){
+  if(!(await requirePin())) return;
   $('uscBody').innerHTML='<div class="hempty">Caricamento…</div>';
   $('uscCount').textContent='';
   $('uscArc').classList.remove('hide');
@@ -2069,7 +2234,10 @@ $('uscBtn').onclick=async function(){
 $('uscClose').onclick=function(){ $('uscArc').classList.add('hide'); };
 $('uscArc').onclick=function(e){ if(e.target===$('uscArc')) $('uscArc').classList.add('hide'); };
 
-$('allBtn').onclick=function(){ renderArchive(); $('archive').classList.remove('hide'); };
+$('allBtn').onclick=async function(){
+  if(!(await requirePin())) return;
+  renderArchive(); $('archive').classList.remove('hide');
+};
 $('arcClose').onclick=function(){ $('archive').classList.add('hide'); };
 $('archive').onclick=function(e){ if(e.target===$('archive')) $('archive').classList.add('hide'); };
 Array.prototype.forEach.call(document.querySelectorAll('#arcC button'), function(b){
@@ -2287,6 +2455,7 @@ $('gPrev').onclick=function(){ if(gI>0){ gI--; gRender(); } };
 $('gNext').onclick=function(){ if(gI<GUIDE.length-1){ gI++; gRender(); } else gClose(); };
 $('guide').onclick=function(e){ if(e.target===$('guide')) gClose(); };
 document.addEventListener('keydown',function(e){
+  if(e.key==='Escape' && !$('pinBox').classList.contains('hide')){ pinDone(null); return; }
   if(e.key==='Escape' && !$('confirmSave').classList.contains('hide')){
     $('confirmSave').classList.add('hide'); return;
   }
@@ -2319,6 +2488,7 @@ onAuthStateChanged(fbAuth, async function(user){
     $('gate').style.display='flex';
     $('whoB').textContent='';
     stopLive();
+    pinUntil=0;
     booted=false;
     return;
   }
